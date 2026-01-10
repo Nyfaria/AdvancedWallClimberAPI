@@ -53,22 +53,16 @@ artifacts {
     commonResources sourceSets.main.resources.sourceDirectories.singleFile
 }
 
-// Source JAR for publishing
-java {
-    withSourcesJar()
-    withJavadocJar()
-}
-
 publishing {
     publications {
-        mavenJava(MavenPublication) {
+        awcapi(MavenPublication) {
             groupId = project.group
             artifactId = "${mod_id}-common"
             version = "${project.version}+${minecraft_version}"
 
-            artifact jar
-            artifact sourcesJar
-            artifact javadocJar
+            afterEvaluate {
+                artifact tasks.named("jar")
+            }
 
             pom {
                 name = mod_name

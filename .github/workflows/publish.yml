@@ -95,19 +95,19 @@ jobs:
         run: ./gradlew build --no-daemon
 
       - name: Publish Common to GitHub Packages
-        run: ./gradlew :common:publish --no-daemon
+        run: ./gradlew :common:publishAwcapiPublicationToGitHubPackagesRepository --no-daemon
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
 
       - name: Publish Fabric to GitHub Packages
-        run: ./gradlew :fabric:publish --no-daemon
+        run: ./gradlew :fabric:publishAwcapiPublicationToGitHubPackagesRepository --no-daemon
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
 
       - name: Publish NeoForge to GitHub Packages
-        run: ./gradlew :neoforge:publish --no-daemon
+        run: ./gradlew :neoforge:publishAwcapiPublicationToGitHubPackagesRepository --no-daemon
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
