@@ -1,20 +1,18 @@
 package com.nyfaria.awcapi;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import com.nyfaria.awcapi.client.IAdvancedClimberRenderState;
 import com.nyfaria.awcapi.entity.IAdvancedClimber;
 import com.nyfaria.awcapi.entity.Orientation;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.debug.*;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.ShapeRenderer;
 import net.minecraft.core.Direction;
+import net.minecraft.gizmos.*;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Matrix4f;
 
 /**
  * Client helper class for the Advanced Wall Climber API.
@@ -164,11 +162,10 @@ public class ClientClimberHelper {
      *
      * @param renderState The render state (must implement IAdvancedClimberRenderState)
      * @param poseStack   The pose stack to restore transformations from
-     * @param buffer      The buffer source (for debug rendering, can be null)
      * @param <S>         The render state type that implements IAdvancedClimberRenderState
      * @return true if climbing transformations were reversed, false otherwise
      */
-    public static <S extends IAdvancedClimberRenderState> boolean postRenderClimber(S renderState, PoseStack poseStack, MultiBufferSource buffer) {
+    public static <S extends IAdvancedClimberRenderState> boolean postRenderClimber(S renderState, PoseStack poseStack) {
         if (!renderState.awca$isClimbing()) {
             return false;
         }
@@ -195,8 +192,8 @@ public class ClientClimberHelper {
         poseStack.mulPose(Axis.YP.rotationDegrees(-yaw));
 
         // Debug rendering
-        if (buffer != null && Minecraft.getInstance().getEntityRenderDispatcher().shouldRenderHitBoxes()) {
-            renderDebugInfoFromState(renderState, poseStack, buffer, x, y, z);
+        if (Minecraft.getInstance().debugEntries.isCurrentlyEnabled(DebugScreenEntries.ENTITY_HITBOXES)) {
+            renderDebugInfoFromState(renderState, poseStack, x, y, z);
         }
 
         poseStack.translate(-x, -y, -z);
@@ -204,76 +201,54 @@ public class ClientClimberHelper {
         return true;
     }
 
-    /**
-     * Simplified version of postRenderClimber without debug rendering.
-     *
-     * @param renderState The render state (must implement IAdvancedClimberRenderState)
-     * @param poseStack   The pose stack to restore transformations from
-     * @param <S>         The render state type that implements IAdvancedClimberRenderState
-     * @return true if climbing transformations were reversed, false otherwise
-     */
-    public static <S extends IAdvancedClimberRenderState> boolean postRenderClimber(S renderState, PoseStack poseStack) {
-        return postRenderClimber(renderState, poseStack, null);
-    }
+
 
     private static <S extends IAdvancedClimberRenderState> void renderDebugInfoFromState(
-            S state, PoseStack poseStack, MultiBufferSource buffer, float x, float y, float z) {
+            S state, PoseStack poseStack, float x, float y, float z) {
 
         Vec3 normal = state.awca$getNormal();
         Vec3 localX = state.awca$getLocalX();
         Vec3 localY = state.awca$getLocalY();
         Vec3 localZ = state.awca$getLocalZ();
 
-        ShapeRenderer.renderLineBox(poseStack, buffer.getBuffer(RenderType.LINES),
-            new AABB(0, 0, 0, 0, 0, 0).inflate(0.2f), 1.0f, 1.0f, 1.0f, 1.0f);
+        // Origin marker
+        Gizmos.cuboid(new AABB(0, 0, 0, 0, 0, 0).inflate(0.2f),
+            GizmoStyle.stroke(0xFFFFFFFF));
 
-        // Draw normal direction
-        Matrix4f matrix4f = poseStack.last().pose();
-        VertexConsumer builder = buffer.getBuffer(RenderType.LINES);
-
-        builder.addVertex(matrix4f, 0, 0, 0).setColor(0, 1, 1, 1).setNormal(0, 0, 0);
-        builder.addVertex(matrix4f, (float) normal.x * 2, (float) normal.y * 2, (float) normal.z * 2)
-            .setColor(1.0f, 0.0f, 1.0f, 1.0f).setNormal(0, 0, 0);
-
-        ShapeRenderer.renderLineBox(poseStack, buffer.getBuffer(RenderType.LINES),
+        // Draw normal direction (magenta)
+        Vec3 origin = Vec3.ZERO;
+        Vec3 normalEnd = new Vec3(normal.x * 2, normal.y * 2, normal.z * 2);
+        Gizmos.arrow(origin, normalEnd, 0xFFFF00FF); // Magenta
+        Gizmos.cuboid(
             new AABB(0, 0, 0, 0, 0, 0)
-                .move((float) normal.x * 2, (float) normal.y * 2, (float) normal.z * 2)
-                .inflate(0.025f), 1.0f, 0.0f, 1.0f, 1.0f);
+                .move(normalEnd.x, normalEnd.y, normalEnd.z)
+                .inflate(0.025f), GizmoStyle.stroke(0xFFFF00FF));
 
-        poseStack.pushPose();
-        poseStack.translate(-x, -y, -z);
-
-        matrix4f = poseStack.last().pose();
         float halfHeight = 0.5f; // Default height since we don't have entity access
+        Vec3 axisOrigin = new Vec3(-x, halfHeight - y, -z);
 
         // X axis (red)
-        builder.addVertex(matrix4f, 0, halfHeight, 0).setColor(0, 1, 1, 1).setNormal(0, 0, 0);
-        builder.addVertex(matrix4f, (float) localX.x, halfHeight + (float) localX.y, (float) localX.z)
-            .setColor(1.0f, 0.0f, 0.0f, 1.0f).setNormal(0, 0, 0);
-        ShapeRenderer.renderLineBox(poseStack, buffer.getBuffer(RenderType.LINES),
+        Vec3 localXEnd = new Vec3(-x + localX.x, halfHeight - y + localX.y, -z + localX.z);
+        Gizmos.arrow(axisOrigin, localXEnd, 0xFFFF0000); // Red
+        Gizmos.cuboid(
             new AABB(0, 0, 0, 0, 0, 0)
-                .move((float) localX.x, halfHeight + (float) localX.y, (float) localX.z)
-                .inflate(0.025f), 1.0f, 0.0f, 0.0f, 1.0f);
+                .move(localXEnd.x, localXEnd.y, localXEnd.z)
+                .inflate(0.025f), GizmoStyle.stroke(0xFFFF0000));
 
         // Y axis (green)
-        builder.addVertex(matrix4f, 0, halfHeight, 0).setColor(0, 1, 1, 1).setNormal(0, 0, 0);
-        builder.addVertex(matrix4f, (float) localY.x, halfHeight + (float) localY.y, (float) localY.z)
-            .setColor(0.0f, 1.0f, 0.0f, 1.0f).setNormal(0, 0, 0);
-        ShapeRenderer.renderLineBox(poseStack, buffer.getBuffer(RenderType.LINES),
+        Vec3 localYEnd = new Vec3(-x + localY.x, halfHeight - y + localY.y, -z + localY.z);
+        Gizmos.arrow(axisOrigin, localYEnd, 0xFF00FF00); // Green
+        Gizmos.cuboid(
             new AABB(0, 0, 0, 0, 0, 0)
-                .move((float) localY.x, halfHeight + (float) localY.y, (float) localY.z)
-                .inflate(0.025f), 0.0f, 1.0f, 0.0f, 1.0f);
+                .move(localYEnd.x, localYEnd.y, localYEnd.z)
+                .inflate(0.025f), GizmoStyle.stroke(0xFF00FF00));
 
         // Z axis (blue)
-        builder.addVertex(matrix4f, 0, halfHeight, 0).setColor(0, 1, 1, 1).setNormal(0, 0, 0);
-        builder.addVertex(matrix4f, (float) localZ.x, halfHeight + (float) localZ.y, (float) localZ.z)
-            .setColor(0.0f, 0.0f, 1.0f, 1.0f).setNormal(0, 0, 0);
-        ShapeRenderer.renderLineBox(poseStack, buffer.getBuffer(RenderType.LINES),
-            new AABB(0, 0, 0, 0, 0, 0)
-                .move((float) localZ.x, halfHeight + (float) localZ.y, (float) localZ.z)
-                .inflate(0.025f), 0.0f, 0.0f, 1.0f, 1.0f);
-
-        poseStack.popPose();
+        Vec3 localZEnd = new Vec3(-x + localZ.x, halfHeight - y + localZ.y, -z + localZ.z);
+        Gizmos.arrow(axisOrigin, localZEnd, 0xFF0000FF); // Blue
+        Gizmos.cuboid(new AABB(0, 0, 0, 0, 0, 0)
+                .move(localZEnd.x, localZEnd.y, localZEnd.z)
+                .inflate(0.025f), GizmoStyle.stroke(0xFF0000FF));
     }
 }
 

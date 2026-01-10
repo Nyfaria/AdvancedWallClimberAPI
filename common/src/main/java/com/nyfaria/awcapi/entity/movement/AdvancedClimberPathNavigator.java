@@ -1,26 +1,16 @@
 package com.nyfaria.awcapi.entity.movement;
 
-import com.google.common.collect.ImmutableSet;
-import com.nyfaria.awcapi.entity.IAdvancedClimber;
-import com.nyfaria.awcapi.entity.Orientation;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.network.protocol.game.DebugPackets;
-import net.minecraft.util.Mth;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.ai.control.MoveControl;
-import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.pathfinder.PathType;
-import net.minecraft.world.level.pathfinder.Node;
-import net.minecraft.world.level.pathfinder.Path;
-import net.minecraft.world.level.pathfinder.PathComputationType;
-import net.minecraft.world.level.pathfinder.PathfindingContext;
-import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.VoxelShape;
-import org.jetbrains.annotations.Nullable;
+import com.google.common.collect.*;
+import com.nyfaria.awcapi.entity.*;
+import net.minecraft.core.*;
+import net.minecraft.util.*;
+import net.minecraft.world.entity.*;
+import net.minecraft.world.entity.ai.control.*;
+import net.minecraft.world.level.*;
+import net.minecraft.world.level.pathfinder.*;
+import net.minecraft.world.phys.*;
+import net.minecraft.world.phys.shapes.*;
+import org.jetbrains.annotations.*;
 
 /**
  * Advanced climber path navigator that handles pathfinding on walls and ceilings.
@@ -80,7 +70,7 @@ public class AdvancedClimberPathNavigator<T extends Mob & IAdvancedClimber> exte
                 }
             }
 
-            DebugPackets.sendPathFindingPacket(this.level, this.mob, this.path, this.maxDistanceToWaypoint);
+//            DebugPackets.sendPathFindingPacket(this.level, this.mob, this.path, this.maxDistanceToWaypoint);
 
             if (!this.isDone()) {
                 Node targetPoint = this.path.getNode(this.path.getNextNodeIndex());

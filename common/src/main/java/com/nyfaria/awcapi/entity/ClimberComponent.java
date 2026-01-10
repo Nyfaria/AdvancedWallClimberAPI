@@ -22,6 +22,7 @@ import net.minecraft.world.level.border.WorldBorder;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.level.pathfinder.Node;
+import net.minecraft.world.level.storage.*;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
@@ -97,14 +98,14 @@ public class ClimberComponent {
         this.groundDirection = getGroundDirection();
     }
 
-    public void writeToNbt(CompoundTag nbt) {
+    public void writeToNbt(ValueOutput nbt) {
         nbt.putDouble("awcapi.AttachmentNormalX", this.attachmentNormal.x);
         nbt.putDouble("awcapi.AttachmentNormalY", this.attachmentNormal.y);
         nbt.putDouble("awcapi.AttachmentNormalZ", this.attachmentNormal.z);
         nbt.putInt("awcapi.AttachedTicks", this.attachedTicks);
     }
 
-    public void readFromNbt(CompoundTag nbt) {
+    public void readFromNbt(ValueInput nbt) {
         this.prevAttachmentNormal = this.attachmentNormal = new Vec3(
                 nbt.getDoubleOr("awcapi.AttachmentNormalX",0),
                 nbt.getDoubleOr("awcapi.AttachmentNormalY",0),
@@ -222,7 +223,7 @@ public class ClimberComponent {
      * Call this in the entity's tick method.
      */
     public void tick() {
-        if (!mob.level().isClientSide) {
+        if (!mob.level().isClientSide()) {
             Orientation orientation = getOrientation();
 
             if (climber.shouldTrackPathingTargets()) {
@@ -693,7 +694,7 @@ public class ClimberComponent {
                 mob.setDeltaMovement(mob.getDeltaMovement().add(boost));
             }
 
-            mob.hasImpulse = true;
+            mob.needsSync = true;
             return true;
         }
         return false;
