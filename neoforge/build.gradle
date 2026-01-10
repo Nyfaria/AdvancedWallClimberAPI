@@ -113,10 +113,13 @@ publishMods {
     modLoaders.add("neoforge")
     displayName = "${mod_name}-${minecraft_version}-[NeoForge]-${project.version}"
     dryRun = dry_run.toBoolean()
-    if (curseforge_publishing_enabled.toBoolean()) {
+}
+
+if (curseforge_publishing_enabled.toBoolean()) {
+    publishMods {
         curseforge {
             projectId = curseforge_project_id
-            accessToken = curseforge_token
+            accessToken = providers.environmentVariable("curseforge_token")
             minecraftVersions.add(minecraft_version)
             clientRequired = true
             serverRequired = true
@@ -125,17 +128,25 @@ publishMods {
             projectSlug = "advanced-wall-climber-api"
         }
     }
-    if (modrinth_publishing_enabled.toBoolean()) {
+}
+
+if (modrinth_publishing_enabled.toBoolean()) {
+    publishMods {
         modrinth {
-            accessToken = modrinth_token
+            accessToken = providers.environmentVariable("modrinth_token")
             projectId = modrinth_project_id
             minecraftVersions.add(minecraft_version)
         }
     }
-    discord {
-        webhookUrl = spider_news
-        username = "Spider News"
-        avatarUrl = "https://media.forgecdn.net/avatars/618/872/638005062440412823.png"
-        content = changelog.map { "# Advanced Wall Climber API ${project.version} has been released for Minecraft ${minecraft_version}! \n (Pending Approval of Course)\n" + it}
+}
+
+if (providers.environmentVariable("spider_news").isPresent()) {
+    publishMods {
+        discord {
+            webhookUrl = providers.environmentVariable("spider_news")
+            username = "Spider News"
+            avatarUrl = "https://media.forgecdn.net/avatars/618/872/638005062440412823.png"
+            content = changelog.map { "# Advanced Wall Climber API ${project.version} has been released for Minecraft ${minecraft_version}! \n (Pending Approval of Course)\n" + it}
+        }
     }
 }
