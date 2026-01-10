@@ -124,7 +124,5 @@ public interface IAdvancedClimberRenderState {
     float awca$getVerticalOffset();
     void awca$setVerticalOffset(float offset);
 
-    float awca$partialTick();
-    void awca$setPartialTick(float partialTick);
 }
 

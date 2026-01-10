@@ -2,7 +2,6 @@ plugins {
     id 'multiloader-loader'
     id 'fabric-loom'
     id "me.modmuss50.mod-publish-plugin" version "0.5.1"
-    id 'com.matyrobbrt.mc.registrationutils' version "${regutils_version}"
     id 'maven-publish'
 }
 
@@ -30,13 +29,13 @@ loom {
     runs {
         client {
             client()
-            setConfigName("Fabric Client")
+            setConfigName(project.mod_id +": Fabric Client")
             ideConfigGenerated(true)
             runDir("runs/client")
         }
         server {
             server()
-            setConfigName("Fabric Server")
+            setConfigName(project.mod_id +": Fabric Server")
             ideConfigGenerated(true)
             runDir("runs/server")
         }
