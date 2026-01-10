@@ -1,8 +1,9 @@
 plugins {
     id 'multiloader-loader'
-    id 'net.neoforged.moddev' version '0.1.114'
+    id 'net.neoforged.moddev'
     id "me.modmuss50.mod-publish-plugin" version "0.5.1"
     id 'com.matyrobbrt.mc.registrationutils' version "${regutils_version}"
+    id 'maven-publish'
 }
 
 
@@ -12,9 +13,13 @@ plugins {
 
 neoForge {
     version = "${neoforge_version}"
-    def at = project(":common").file('src/main/resources/META-INF/accesstransformer.cfg')
+    def at = project(':common').file('src/main/resources/META-INF/accesstransformer.cfg')
     if (at.exists()) {
-        minecraft.accessTransformers.file at
+        accessTransformers.from(at.absolutePath)
+    }
+    parchment {
+        minecraftVersion = parchment_minecraft
+        mappingsVersion = parchment_version
     }
     mods {
         "${mod_id}" {
@@ -25,11 +30,13 @@ neoForge {
         client {
             client()
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+            ideName = project.mod_id + ": Client"
         }
         server {
             server()
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
             programArgument '--nogui'
+            ideName = project.mod_id + ": Server"
         }
         data {
             data()
@@ -40,6 +47,63 @@ neoForge {
 sourceSets.main.resources { srcDir project(":common").file('src/generated/resources').getAbsolutePath() }
 
 dependencies {
+}
+
+// Source JAR for publishing
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            groupId = project.group
+            artifactId = "${mod_id}-neoforge"
+            version = "${project.version}+${minecraft_version}"
+
+            artifact jar
+            artifact sourcesJar
+            artifact javadocJar
+
+            pom {
+                name = "${mod_name} (NeoForge)"
+                description = project.description ?: 'An API for advanced wall climbing mechanics.'
+                url = 'https://github.com/Nyfaria/AdvancedWallClimberAPI'
+
+                licenses {
+                    license {
+                        name = 'All Rights Reserved'
+                        url = 'https://github.com/Nyfaria/AdvancedWallClimberAPI'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'nyfaria'
+                        name = 'Nyfaria'
+                    }
+                }
+
+                scm {
+                    connection = 'scm:git:git://github.com/Nyfaria/AdvancedWallClimberAPI.git'
+                    developerConnection = 'scm:git:ssh://github.com/Nyfaria/AdvancedWallClimberAPI.git'
+                    url = 'https://github.com/Nyfaria/AdvancedWallClimberAPI'
+                }
+            }
+        }
+    }
+
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/Nyfaria/AdvancedWallClimberAPI")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR") ?: findProperty("gpr.user") ?: ""
+                password = System.getenv("GITHUB_TOKEN") ?: findProperty("gpr.key") ?: ""
+            }
+        }
+    }
 }
 
 publishMods {
@@ -56,9 +120,9 @@ publishMods {
             minecraftVersions.add(minecraft_version)
             clientRequired = true
             serverRequired = true
-            javaVersions.add(JavaVersion.VERSION_17)
+            javaVersions.add(JavaVersion.VERSION_21)
             announcementTitle = "Download NeoForge Version from CurseForge"
-            projectSlug = "nyfs-spiders"
+            projectSlug = "advanced-wall-climber-api"
         }
     }
     if (modrinth_publishing_enabled.toBoolean()) {
@@ -72,6 +136,6 @@ publishMods {
         webhookUrl = spider_news
         username = "Spider News"
         avatarUrl = "https://media.forgecdn.net/avatars/618/872/638005062440412823.png"
-        content = changelog.map { "# Nyf's Spiders ${project.version} has been released for Minecraft ${minecraft_version}! \n (Pending Approval of Course)\n" + it}
+        content = changelog.map { "# Advanced Wall Climber API ${project.version} has been released for Minecraft ${minecraft_version}! \n (Pending Approval of Course)\n" + it}
     }
 }

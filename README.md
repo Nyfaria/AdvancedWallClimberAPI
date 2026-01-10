@@ -1,30 +1,295 @@
-# MultiLoader Template
+# Advanced Wall Climber API (AWCAPI)
 
-This project provides a Gradle project template that can compile mods for multiple modloaders using a common sourceset. This project does not require any third party libraries or dependencies. If you have any questions or want to discuss the project join our [Discord](https://discord.myceliummod.network).
+A powerful API for Minecraft mods that enables advanced wall climbing mechanics for entities. This API allows mod developers to easily add spider-like wall climbing behavior to any mob.
 
-## Getting Started
+## Features
 
-### IntelliJ IDEA
-This guide will show how to import the MultiLoader Template into IntelliJ IDEA. The setup process is roughly equivalent to setting up the modloaders independently and should be very familiar to anyone who has worked with their MDKs.
+- **Full 3D Wall Climbing**: Entities can walk on walls, ceilings, and any surface
+- **Smooth Orientation Transitions**: Natural-looking transitions when moving between surfaces
+- **Custom Pathfinding**: Advanced pathfinding that understands 3D movement
+- **Render Helpers**: Easy-to-use rendering utilities for proper model orientation
+- **Cross-Platform**: Works on both Fabric and NeoForge
 
-1. Clone or download this repository to your computer.
-2. Configure the project by editing the `group`, `mod_name`, `mod_author`, and `mod_id` properties in the `gradle.properties` file. You will also need to change the `rootProject.name`  property in `settings.gradle`, this should match the folder name of your project, or else IDEA may complain.
-3. Open the template's root folder as a new project in IDEA. This is the folder that contains this README file and the gradlew executable.
-4. If your default JVM/JDK is not Java 21 you will encounter an error when opening the project. This error is fixed by going to `File > Settings > Build, Execution, Deployment > Build Tools > Gradle > Gradle JVM` and changing the value to a valid Java 21 JVM. You will also need to set the Project SDK to Java 21. This can be done by going to `File > Project Structure > Project SDK`. Once both have been set open the Gradle tab in IDEA and click the refresh button to reload the project.
-5. Open the Gradle tab in IDEA if it has not already been opened. Navigate to `Your Project > Common > Tasks > vanilla gradle > decompile`. Run this task to decompile Minecraft.
-6. Open your Run/Debug Configurations. Under the Application category there should now be options to run NeoForge and Fabric projects. Select one of the client options and try to run it.
-7. Assuming you were able to run the game in step 7 your workspace should now be set up.
+## Adding AWCAPI to Your Project
 
-### Eclipse
-While it is possible to use this template in Eclipse it is not recommended. During the development of this template multiple critical bugs and quirks related to Eclipse were found at nearly every level of the required build tools. While we continue to work with these tools to report and resolve issues support for projects like these are not there yet. For now Eclipse is considered unsupported by this project. The development cycle for build tools is notoriously slow so there are no ETAs available.
+### Repository Setup
 
-## Development Guide
-When using this template the majority of your mod is developed in the Common project. The Common project is compiled against the vanilla game and is used to hold code that is shared between the different loader-specific versions of your mod. The Common project has no knowledge or access to ModLoader specific code, apis, or concepts. Code that requires something from a specific loader must be done through the project that is specific to that loader, such as the NeoForge or Fabric project.
+Add the GitHub Packages repository to your `build.gradle` or `settings.gradle`:
 
-Loader specific projects such as the NeoForge and Fabric project are used to load the Common project into the game. These projects also define code that is specific to that loader. Loader specific projects can access all of the code in the Common project. It is important to remember that the Common project can not access code from loader specific projects.
+```groovy
+repositories {
+    maven {
+        name = "GitHubPackages"
+        url = uri("https://maven.pkg.github.com/Nyfaria/AdvancedWallClimberAPI")
+        credentials {
+            // Use your GitHub username and a Personal Access Token with read:packages scope
+            username = project.findProperty("gpr.user") ?: System.getenv("GITHUB_ACTOR")
+            password = project.findProperty("gpr.key") ?: System.getenv("GITHUB_TOKEN")
+        }
+    }
+}
+```
 
-## Removing Platforms and Loaders
-While the MultiLoader Template includes support for many platforms and loaders you can easily remove support for the ones you don't need. This can be done by deleting the subproject folder and then removing it from the `settings.gradle` file. For example if you wanted to remove support for Forge you would follow the following steps. 
+### Authentication
 
-1. Delete the subproject folder. For example, delete `MultiLoader-Template/forge`.
-2. Remove the project from `settings.gradle`. For example, remove `include("forge")`. 
+GitHub Packages requires authentication even for public packages. Create a Personal Access Token (PAT) with `read:packages` scope:
+
+1. Go to GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
+2. Generate a new token with `read:packages` scope
+3. Add to your `~/.gradle/gradle.properties`:
+
+```properties
+gpr.user=YOUR_GITHUB_USERNAME
+gpr.key=YOUR_PERSONAL_ACCESS_TOKEN
+```
+
+### Dependencies
+
+#### Common Module (Multi-loader projects)
+```groovy
+dependencies {
+    compileOnly "com.nyfaria.awcapi:awcapi-common:1.0.0+1.21.1"
+}
+```
+
+#### Fabric
+```groovy
+dependencies {
+    modImplementation "com.nyfaria.awcapi:awcapi-fabric:1.0.0+1.21.1"
+}
+```
+
+#### NeoForge
+```groovy
+dependencies {
+    implementation "com.nyfaria.awcapi:awcapi-neoforge:1.0.0+1.21.1"
+}
+```
+
+## Quick Start Guide
+
+### 1. Implement IAdvancedClimber
+
+Make your entity implement `IAdvancedClimber`:
+
+```java
+public class MyClimbingMob extends PathfinderMob implements IAdvancedClimber {
+    private final ClimberComponent climberComponent;
+
+    public MyClimbingMob(EntityType<? extends MyClimbingMob> type, Level level) {
+        super(type, level);
+        this.climberComponent = new ClimberComponent(this);
+        
+        // Initialize climbing controllers
+        this.moveControl = new ClimberMoveController<>(this);
+        this.lookControl = new ClimberLookController<>(this);
+        this.jumpControl = new ClimberJumpController<>(this);
+    }
+
+    @Override
+    public ClimberComponent getClimberComponent() {
+        return climberComponent;
+    }
+
+    @Override
+    public Mob asMob() {
+        return this;
+    }
+
+    @Override
+    public float getMovementSpeed() {
+        return (float) getAttributeValue(Attributes.MOVEMENT_SPEED);
+    }
+
+    @Override
+    public float getBlockSlipperiness(BlockPos pos) {
+        return level().getBlockState(pos).getBlock().getFriction() * 0.91f;
+    }
+
+    @Override
+    public boolean canClimbOnBlock(BlockState state, BlockPos pos) {
+        return true; // Or add custom logic for non-climbable blocks
+    }
+}
+```
+
+### 2. Override Required Methods
+
+Override these methods in your entity class:
+
+```java
+@Override
+protected PathNavigation createNavigation(Level level) {
+    ClimberPathNavigator<MyClimbingMob> navigator = new ClimberPathNavigator<>(this, level, false);
+    navigator.setCanFloat(true);
+    return navigator;
+}
+
+@Override
+public void aiStep() {
+    ClimberHelper.livingTickClimber(this);
+    super.aiStep();
+}
+
+@Override
+public void tick() {
+    super.tick();
+    ClimberHelper.tickClimber(this);
+}
+
+@Override
+public void move(MoverType type, Vec3 movement) {
+    ClimberHelper.handleMove(this, type, movement, true);
+    super.move(type, movement);
+    ClimberHelper.handleMove(this, type, movement, false);
+}
+
+@Override
+public void travel(Vec3 travelVector) {
+    if (!ClimberHelper.handleTravel(this, travelVector)) {
+        super.travel(travelVector);
+    }
+    ClimberHelper.postTravel(this, travelVector);
+}
+
+@Override
+public void jumpFromGround() {
+    if (!ClimberHelper.handleJump(this)) {
+        super.jumpFromGround();
+    }
+}
+
+@Override
+public BlockPos getOnPos() {
+    return ClimberHelper.getAdjustedOnPosition(this, super.getOnPos());
+}
+
+@Override
+public boolean onClimbable() {
+    return false; // Disable vanilla climbing
+}
+```
+
+### 3. Client-Side Rendering
+
+For proper model orientation, use the render helpers:
+
+```java
+public static void onPreRenderLiving(LivingEntity entity, float partialTicks, PoseStack poseStack) {
+    if (entity instanceof IAdvancedClimber climber) {
+        Orientation orientation = climber.getOrientation();
+        Orientation renderOrientation = climber.getClimberComponent().getRenderOrientation();
+        
+        if (renderOrientation != null) {
+            poseStack.mulPose(renderOrientation.getRotation());
+            
+            // Apply attachment offset
+            ClimberComponent component = climber.getClimberComponent();
+            poseStack.translate(
+                component.getAttachmentOffset(Direction.Axis.X, partialTicks),
+                component.getAttachmentOffset(Direction.Axis.Y, partialTicks),
+                component.getAttachmentOffset(Direction.Axis.Z, partialTicks)
+            );
+        }
+    }
+}
+```
+
+### 4. Using with Mixins (for vanilla entities)
+
+If you want to add climbing to vanilla entities like Spider:
+
+```java
+@Mixin(Spider.class)
+public abstract class SpiderMixin extends Monster implements IAdvancedClimber {
+    @Unique
+    private ClimberComponent climberComponent;
+
+    protected SpiderMixin(EntityType<? extends Monster> type, Level level) {
+        super(type, level);
+    }
+
+    @Inject(method = "<init>", at = @At("RETURN"))
+    private void onInit(EntityType<?> type, Level level, CallbackInfo ci) {
+        this.climberComponent = new ClimberComponent(this);
+        this.moveControl = new ClimberMoveController<>(this);
+        this.lookControl = new ClimberLookController<>(this);
+        this.jumpControl = new ClimberJumpController<>(this);
+    }
+
+    @Override
+    public ClimberComponent getClimberComponent() {
+        return climberComponent;
+    }
+
+    // ... implement other IAdvancedClimber methods
+}
+```
+
+## API Reference
+
+### IAdvancedClimber Interface
+
+The main interface your entity must implement:
+
+| Method | Description |
+|--------|-------------|
+| `getClimberComponent()` | Returns the ClimberComponent instance |
+| `asMob()` | Returns the entity as a Mob |
+| `getMovementSpeed()` | Returns the entity's movement speed |
+| `getBlockSlipperiness(BlockPos)` | Returns slipperiness for a block position |
+| `canClimbOnBlock(BlockState, BlockPos)` | Whether the entity can climb on a specific block |
+| `getOrientation()` | Gets the current orientation |
+| `getVerticalOffset(float)` | Gets the vertical offset for rendering |
+
+### ClimberHelper Static Methods
+
+| Method | Description |
+|--------|-------------|
+| `tickClimber(IAdvancedClimber)` | Call in entity's tick() |
+| `livingTickClimber(IAdvancedClimber)` | Call in entity's aiStep() |
+| `handleTravel(IAdvancedClimber, Vec3)` | Call in travel(), returns true if handled |
+| `postTravel(IAdvancedClimber, Vec3)` | Call after travel() |
+| `handleMove(IAdvancedClimber, MoverType, Vec3, boolean)` | Call before/after move() |
+| `handleJump(IAdvancedClimber)` | Call in jumpFromGround(), returns true if handled |
+| `getAdjustedOnPosition(IAdvancedClimber, BlockPos)` | Get adjusted ground position |
+
+### Movement Controllers
+
+- `ClimberMoveController<T>` - Handles 3D movement
+- `ClimberLookController<T>` - Handles looking in local space
+- `ClimberJumpController<T>` - Handles jumping from any surface
+- `ClimberPathNavigator<T>` - Pathfinding that understands wall climbing
+
+## Building from Source
+
+```bash
+git clone https://github.com/Nyfaria/AdvancedWallClimberAPI.git
+cd AdvancedWallClimberAPI
+./gradlew build
+```
+
+## Publishing (For Maintainers)
+
+The project automatically publishes to GitHub Packages when:
+- A new release is created on GitHub
+- The publish workflow is manually triggered
+
+To publish manually:
+```bash
+./gradlew publish
+```
+
+## License
+
+All Rights Reserved - Contact Nyfaria for licensing inquiries.
+
+## Credits
+
+- **Nyfaria** - Original author and maintainer
+- Based on concepts from Nyf's Spiders mod
+
+## Support
+
+For issues and feature requests, please use the [GitHub Issues](https://github.com/Nyfaria/AdvancedWallClimberAPI/issues) page.
+

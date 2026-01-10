@@ -1,14 +1,20 @@
 plugins {
     id 'multiloader-common'
-    id 'net.neoforged.moddev' version '0.1.114'
+    id 'net.neoforged.moddev'
     id 'com.matyrobbrt.mc.registrationutils' version "${regutils_version}"
+    id 'maven-publish'
 }
 
-
 neoForge {
-    // Look for versions on https://projects.neoforged.net/neoforged/neoform
-    neoFormVersion = "1.21-20240613.152323"
-
+    neoFormVersion = neo_form_version
+    def at = file('src/main/resources/META-INF/accesstransformer.cfg')
+    if (at.exists()) {
+        accessTransformers.from(at.absolutePath)
+    }
+    parchment {
+        minecraftVersion = parchment_minecraft
+        mappingsVersion = parchment_version
+    }
     runs {
         client {
             client()
@@ -25,6 +31,9 @@ repositories {
     maven { url "https://maven.fabricmc.net/" }
 }
 dependencies {
+    compileOnly group: 'org.spongepowered', name: 'mixin', version: '0.8.5'
+    compileOnly group: 'io.github.llamalad7', name: 'mixinextras-common', version: '0.5.2'
+    annotationProcessor group: 'io.github.llamalad7', name: 'mixinextras-common', version: '0.5.2'
     compileOnly "fuzs.forgeconfigapiport:forgeconfigapiport-common-neoforgeapi:${project.forge_config_api_port_version}"
 }
 
@@ -42,5 +51,62 @@ configurations {
 artifacts {
     commonJava sourceSets.main.java.sourceDirectories.singleFile
     commonResources sourceSets.main.resources.sourceDirectories.singleFile
+}
+
+// Source JAR for publishing
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            groupId = project.group
+            artifactId = "${mod_id}-common"
+            version = "${project.version}+${minecraft_version}"
+
+            artifact jar
+            artifact sourcesJar
+            artifact javadocJar
+
+            pom {
+                name = mod_name
+                description = project.description ?: 'An API for advanced wall climbing mechanics.'
+                url = 'https://github.com/Nyfaria/AdvancedWallClimberAPI'
+
+                licenses {
+                    license {
+                        name = 'All Rights Reserved'
+                        url = 'https://github.com/Nyfaria/AdvancedWallClimberAPI'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'nyfaria'
+                        name = 'Nyfaria'
+                    }
+                }
+
+                scm {
+                    connection = 'scm:git:git://github.com/Nyfaria/AdvancedWallClimberAPI.git'
+                    developerConnection = 'scm:git:ssh://github.com/Nyfaria/AdvancedWallClimberAPI.git'
+                    url = 'https://github.com/Nyfaria/AdvancedWallClimberAPI'
+                }
+            }
+        }
+    }
+
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/Nyfaria/AdvancedWallClimberAPI")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR") ?: findProperty("gpr.user") ?: ""
+                password = System.getenv("GITHUB_TOKEN") ?: findProperty("gpr.key") ?: ""
+            }
+        }
+    }
 }
 
