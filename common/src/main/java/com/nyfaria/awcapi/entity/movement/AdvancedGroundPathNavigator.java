@@ -131,7 +131,7 @@ public class AdvancedGroundPathNavigator<T extends Mob & IAdvancedClimber> exten
             };
 
             Vec3 facingDiff = checkPos.subtract(entityPos.add(0, axis == 1 ? this.mob.getBbHeight() / 2 : 0, 0));
-            Direction facing = Direction.getNearest((float) facingDiff.x, (float) facingDiff.y, (float) facingDiff.z);
+            Direction facing = Direction.getApproximateNearest((float) facingDiff.x, (float) facingDiff.y, (float) facingDiff.z);
 
             boolean blocked = false;
 

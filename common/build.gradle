@@ -15,17 +15,6 @@ neoForge {
         minecraftVersion = parchment_minecraft
         mappingsVersion = parchment_version
     }
-    runs {
-        client {
-            client()
-        }
-        server {
-            server()
-        }
-        data {
-            data()
-        }
-    }
 }
 repositories {
     maven { url "https://maven.fabricmc.net/" }

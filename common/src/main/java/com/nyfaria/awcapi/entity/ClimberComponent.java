@@ -106,11 +106,11 @@ public class ClimberComponent {
 
     public void readFromNbt(CompoundTag nbt) {
         this.prevAttachmentNormal = this.attachmentNormal = new Vec3(
-                nbt.getDouble("awcapi.AttachmentNormalX"),
-                nbt.getDouble("awcapi.AttachmentNormalY"),
-                nbt.getDouble("awcapi.AttachmentNormalZ")
+                nbt.getDoubleOr("awcapi.AttachmentNormalX",0),
+                nbt.getDoubleOr("awcapi.AttachmentNormalY",0),
+                nbt.getDoubleOr("awcapi.AttachmentNormalZ",0)
         );
-        this.attachedTicks = nbt.getInt("awcapi.AttachedTicks");
+        this.attachedTicks = nbt.getIntOr("awcapi.AttachedTicks",0);
         this.orientation = calculateOrientation(1);
     }
 
@@ -327,7 +327,7 @@ public class ClimberComponent {
      */
     public boolean onTravel(Vec3 relative, boolean pre) {
         if (pre) {
-            boolean canTravel = mob.isEffectiveAi() || mob.isControlledByLocalInstance();
+            boolean canTravel = mob.isEffectiveAi() || mob.isLocalInstanceAuthoritative();
             isTravelingInFluid = false;
 
             FluidState fluidState = mob.level().getFluidState(mob.blockPosition());
@@ -672,8 +672,8 @@ public class ClimberComponent {
     public boolean onJump() {
         if (jumpDir != null) {
             float jumpStrength = 0.42f; // Default jump power
-            if (mob.hasEffect(MobEffects.JUMP)) {
-                var effect = mob.getEffect(MobEffects.JUMP);
+            if (mob.hasEffect(MobEffects.JUMP_BOOST)) {
+                var effect = mob.getEffect(MobEffects.JUMP_BOOST);
                 if (effect != null) {
                     jumpStrength += 0.1F * (effect.getAmplifier() + 1);
                 }
@@ -777,8 +777,8 @@ public class ClimberComponent {
             }
 
             @Override
-            public int getMinBuildHeight() {
-                return mob.level().getMinBuildHeight();
+            public int getMinY() {
+                return mob.level().getMinY();
             }
 
             @Override

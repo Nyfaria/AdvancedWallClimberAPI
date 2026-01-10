@@ -149,7 +149,7 @@ public class AdvancedClimberPathNavigator<T extends Mob & IAdvancedClimber> exte
         Orientation orientation = this.climber.getOrientation();
         Vec3 upVector = orientation.getGlobal(this.mob.yRot, -90);
 
-        this.verticalFacing = Direction.getNearest((float) upVector.x, (float) upVector.y, (float) upVector.z);
+        this.verticalFacing = Direction.getApproximateNearest((float) upVector.x, (float) upVector.y, (float) upVector.z);
 
         // Look up to 4 nodes ahead so it doesn't backtrack
         for (int i = 4; i >= 0; i--) {

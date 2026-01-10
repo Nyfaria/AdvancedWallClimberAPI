@@ -187,7 +187,7 @@ public class ClimberMoveController<T extends Mob & IAdvancedClimber> extends Mov
                 dz += oz;
             }
 
-            Direction mainOffsetDir = Direction.getNearest(dx, dy, dz);
+            Direction mainOffsetDir = Direction.getApproximateNearest(dx, dy, dz);
 
             float reach;
             switch (mainOffsetDir) {
