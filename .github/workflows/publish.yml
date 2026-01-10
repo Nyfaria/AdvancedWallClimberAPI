@@ -7,6 +7,12 @@ on:
   release:
     types: [created]
   workflow_dispatch:
+    inputs:
+      force_publish:
+        description: 'Force publish even if version unchanged'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   check-version:
@@ -28,11 +34,19 @@ jobs:
           echo "Current version: $CURRENT_VERSION"
           echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
           
-          # For releases and manual triggers, always publish
-          if [ "${{ github.event_name }}" = "release" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          # For releases, manual triggers with force, always publish
+          if [ "${{ github.event_name }}" = "release" ]; then
             echo "version_changed=true" >> $GITHUB_OUTPUT
-            echo "Publishing due to release or manual trigger"
+            echo "Publishing due to release"
             exit 0
+          fi
+          
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ inputs.force_publish }}" = "true" ]; then
+              echo "version_changed=true" >> $GITHUB_OUTPUT
+              echo "Publishing due to forced manual trigger"
+              exit 0
+            fi
           fi
           
           # For pushes, check if version changed
