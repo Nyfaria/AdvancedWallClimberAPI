@@ -1,6 +1,6 @@
 plugins {
     id 'multiloader-loader'
-    id 'fabric-loom'
+    id 'net.fabricmc.fabric-loom'
     id "me.modmuss50.mod-publish-plugin" version "0.5.1"
     id 'maven-publish'
 }
@@ -8,12 +8,9 @@ plugins {
 
 dependencies {
     minecraft "com.mojang:minecraft:${minecraft_version}"
-    mappings loom.layered() {
-        officialMojangMappings()
-//        parchment("org.parchmentmc.data:parchment-1.20.6:2024.05.01@zip")
-    }
-    modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
+
+    implementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
 }
 
 loom {
@@ -48,7 +45,7 @@ publishing {
             version = "${project.version}+${minecraft_version}"
 
             afterEvaluate {
-                artifact tasks.named("remapJar")
+                artifact tasks.named("jar")
             }
 
             pom {
@@ -92,7 +89,7 @@ publishing {
 }
 
 publishMods {
-    file = remapJar.archiveFile
+    file = jar.archiveFile
     changelog = project(":common").file("changelog.md").text
     type = STABLE
     modLoaders.add("fabric")
