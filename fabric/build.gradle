@@ -2,7 +2,6 @@ plugins {
     id 'multiloader-loader'
     id 'fabric-loom'
     id "me.modmuss50.mod-publish-plugin" version "0.5.1"
-    id 'com.matyrobbrt.mc.registrationutils' version "${regutils_version}"
     id 'maven-publish'
 }
 
