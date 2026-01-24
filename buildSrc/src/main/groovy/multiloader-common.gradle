@@ -1,6 +1,7 @@
 plugins {
     id 'java-library'
     id 'maven-publish'
+    id 'dev._100media.gradleutils'
 }
 
 base {
@@ -83,15 +84,15 @@ processResources {
             "group"                        : project.group, //Else we target the task's group.
             "minecraft_version"            : minecraft_version,
             "minecraft_version_range"      : minecraft_version_range,
-            "fabric_version"               : fabric_version,
-            "fabric_loader_version"        : fabric_loader_version,
+            "fabric_version"               : libs.versions.fabric.api.get(),
+            "fabric_loader_version"        : libs.versions.fabric.loader.get(),
             "mod_name"                     : mod_name,
             "mod_author"                   : mod_author,
             "mod_id"                       : mod_id,
             "license"                      : license,
             "description"                  : project.description,
-            "neoforge_version"             : neoforge_version,
-            "neoforge_loader_version_range": neoforge_loader_version_range,
+            "forge_version"                : libs.versions.forge.version.main.get(),
+            "forge_loader_version_range"   : libs.versions.forge.loader.range.get(),
             "credits"                      : credits,
             "java_version"                 : java_version
     ]

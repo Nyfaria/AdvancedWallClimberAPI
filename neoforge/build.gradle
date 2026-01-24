@@ -1,41 +1,47 @@
 plugins {
     id 'multiloader-loader'
-    id 'net.neoforged.moddev'
-    id "me.modmuss50.mod-publish-plugin" version "0.5.1"
-    id 'maven-publish'
+    alias(libs.plugins.mdg.forge)
+    alias(libs.plugins.mod.publish)
+    alias(libs.plugins.hundred.media)
 }
 
+configurations.all {
+    resolutionStrategy.cacheDynamicVersionsFor(1, "seconds")
+}
 
-// Automatically enable neoforge AccessTransformers if the file exists
-// This location is hardcoded in FML and can not be changed.
-// https://github.com/neoforged/FancyModLoader/blob/a952595eaaddd571fbc53f43847680b00894e0c1/loader/src/main/java/net/neoforged/fml/loading/moddiscovery/ModFile.java#L118
+mixin {
+    add(sourceSets.main, "${mod_id}.refmap.json")
 
-neoForge {
-    version = "${neoforge_version}"
-    def at = project(':common').file('src/main/resources/META-INF/accesstransformer.cfg')
+    config("${mod_id}.mixins.json")
+}
+
+legacyForge {
+    version = libs.versions.common.minecraft.get()
+    def at = project(":common").file('src/main/resources/META-INF/accesstransformer.cfg')
     if (at.exists()) {
-        accessTransformers.from(at.absolutePath)
+        accessTransformers = [at]
     }
     parchment {
-        minecraftVersion = parchment_minecraft
-        mappingsVersion = parchment_version
+        minecraftVersion = libs.versions.parchment.minecraft.get()
+        mappingsVersion = libs.versions.parchment.version.get()
     }
+
     mods {
         "${mod_id}" {
-            sourceSet(sourceSets.main)
+            sourceSet sourceSets.main
         }
     }
+
     runs {
+        configureEach {
+            jvmArguments =['-XX:+AllowEnhancedClassRedefinition']
+
+        }
         client {
             client()
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
-            ideName = project.mod_id + ": Client"
         }
         server {
             server()
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
-            programArgument '--nogui'
-            ideName = project.mod_id + ": Server"
         }
         data {
             data()
@@ -45,101 +51,43 @@ neoForge {
 }
 sourceSets.main.resources { srcDir project(":common").file('src/generated/resources').getAbsolutePath() }
 
+
 dependencies {
-}
-
-publishing {
-    publications {
-        awcapi(MavenPublication) {
-            groupId = project.group
-            artifactId = "${mod_id}-neoforge"
-            version = "${project.version}+${minecraft_version}"
-
-            afterEvaluate {
-                artifact tasks.named("jar")
-            }
-
-            pom {
-                name = "${mod_name} (NeoForge)"
-                description = project.description ?: 'An API for advanced wall climbing mechanics.'
-                url = 'https://github.com/Nyfaria/AdvancedWallClimberAPI'
-
-                licenses {
-                    license {
-                        name = 'All Rights Reserved'
-                        url = 'https://github.com/Nyfaria/AdvancedWallClimberAPI'
-                    }
-                }
-
-                developers {
-                    developer {
-                        id = 'nyfaria'
-                        name = 'Nyfaria'
-                    }
-                }
-
-                scm {
-                    connection = 'scm:git:git://github.com/Nyfaria/AdvancedWallClimberAPI.git'
-                    developerConnection = 'scm:git:ssh://github.com/Nyfaria/AdvancedWallClimberAPI.git'
-                    url = 'https://github.com/Nyfaria/AdvancedWallClimberAPI'
-                }
-            }
-        }
-    }
-
-    repositories {
-        maven {
-            name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/Nyfaria/AdvancedWallClimberAPI")
-            credentials {
-                username = System.getenv("GITHUB_ACTOR") ?: findProperty("gpr.user") ?: ""
-                password = System.getenv("GITHUB_TOKEN") ?: findProperty("gpr.key") ?: ""
-            }
+    compileOnly(project(":common"))
+    annotationProcessor(libs.mixin) {
+        artifact {
+            classifier = 'processor'
         }
     }
 }
-
+jar {
+    finalizedBy('reobfJar')
+    manifest.attributes([
+            "MixinConfigs": "${mod_id}.mixins.json"
+    ])
+}
 publishMods {
     file = jar.archiveFile
     changelog = project(":common").file("changelog.md").text
     type = STABLE
-    modLoaders.add("neoforge")
-    displayName = "${mod_name}-${minecraft_version}-[NeoForge]-${project.version}"
+    modLoaders.add("forge")
+    displayName = "${mod_name}-${minecraft_version}-[Forge]-${project.version}"
     dryRun = dry_run.toBoolean()
-}
-
-if (curseforge_publishing_enabled.toBoolean()) {
-    publishMods {
+    if (curseforge_publishing_enabled.toBoolean()) {
         curseforge {
             projectId = curseforge_project_id
-            accessToken = providers.environmentVariable("curseforge_token")
+            accessToken = curseforge_token
             minecraftVersions.add(minecraft_version)
             clientRequired = true
             serverRequired = true
-            javaVersions.add(JavaVersion.VERSION_21)
-            announcementTitle = "Download NeoForge Version from CurseForge"
-            projectSlug = "advanced-wall-climber-api"
+            javaVersions.add(JavaVersion.VERSION_17)
         }
     }
-}
-
-if (modrinth_publishing_enabled.toBoolean()) {
-    publishMods {
+    if (modrinth_publishing_enabled.toBoolean()) {
         modrinth {
-            accessToken = providers.environmentVariable("modrinth_token")
+            accessToken = modrinth_token
             projectId = modrinth_project_id
             minecraftVersions.add(minecraft_version)
-        }
-    }
-}
-
-if (providers.environmentVariable("spider_news").isPresent()) {
-    publishMods {
-        discord {
-            webhookUrl = providers.environmentVariable("spider_news")
-            username = "Spider News"
-            avatarUrl = "https://media.forgecdn.net/avatars/618/872/638005062440412823.png"
-            content = changelog.map { "# Advanced Wall Climber API ${project.version} has been released for Minecraft ${minecraft_version}! \n (Pending Approval of Course)\n" + it}
         }
     }
 }

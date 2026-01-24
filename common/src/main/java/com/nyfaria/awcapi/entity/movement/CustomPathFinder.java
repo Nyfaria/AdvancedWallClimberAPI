@@ -68,7 +68,7 @@ public class CustomPathFinder extends PathFinder {
         Node pathpoint = this.nodeProcessor.getStart();
 
         Map<Target, BlockPos> checkpointsMap = checkpoints.stream().collect(Collectors.toMap((pos) -> {
-            return this.nodeProcessor.getTarget(pos.getX(), pos.getY(), pos.getZ());
+            return this.nodeProcessor.getGoal(pos.getX(), pos.getY(), pos.getZ());
         }, Function.identity()));
 
         Path path = this.findPath(pathpoint, checkpointsMap, maxDistance, checkpointRange, maxExpansionsMultiplier);

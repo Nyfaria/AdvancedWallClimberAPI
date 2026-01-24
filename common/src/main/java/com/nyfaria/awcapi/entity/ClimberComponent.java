@@ -1,37 +1,26 @@
 package com.nyfaria.awcapi.entity;
 
-import com.nyfaria.awcapi.util.CollisionSmoothingUtil;
-import com.nyfaria.awcapi.util.Matrix4f;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.tags.BlockTags;
-import net.minecraft.util.Mth;
-import net.minecraft.world.effect.MobEffects;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.MoverType;
-import net.minecraft.world.entity.ai.attributes.AttributeInstance;
-import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.level.CollisionGetter;
-import net.minecraft.world.level.block.FenceGateBlock;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.border.WorldBorder;
-import net.minecraft.world.level.material.FluidState;
-import net.minecraft.world.level.pathfinder.Path;
-import net.minecraft.world.level.pathfinder.Node;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.Shapes;
-import net.minecraft.world.phys.shapes.VoxelShape;
-import org.apache.commons.lang3.tuple.Pair;
-import org.jetbrains.annotations.Nullable;
+import com.nyfaria.awcapi.util.*;
+import net.minecraft.core.*;
+import net.minecraft.nbt.*;
+import net.minecraft.tags.*;
+import net.minecraft.util.*;
+import net.minecraft.world.effect.*;
+import net.minecraft.world.entity.*;
+import net.minecraft.world.entity.ai.attributes.*;
+import net.minecraft.world.level.*;
+import net.minecraft.world.level.block.*;
+import net.minecraft.world.level.block.entity.*;
+import net.minecraft.world.level.block.state.*;
+import net.minecraft.world.level.border.*;
+import net.minecraft.world.level.material.*;
+import net.minecraft.world.level.pathfinder.*;
+import net.minecraft.world.phys.*;
+import net.minecraft.world.phys.shapes.*;
+import org.apache.commons.lang3.tuple.*;
+import org.jetbrains.annotations.*;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 /**
  * Component that handles all the climbing logic for an entity.
@@ -477,8 +466,7 @@ public class ClimberComponent {
 
         if (detachedX || detachedY || detachedZ) {
             float stepHeight = mob.maxUpStep();
-            AttributeInstance stepAttr = mob.getAttribute(Attributes.STEP_HEIGHT);
-            if (stepAttr != null) stepAttr.setBaseValue(0);
+            mob.setMaxUpStep(0);
             boolean prevOnGround = mob.onGround();
             boolean prevCollidedHorizontally = mob.horizontalCollision;
             boolean prevCollidedVertically = mob.verticalCollision;
@@ -509,7 +497,7 @@ public class ClimberComponent {
                 mob.move(MoverType.SELF, attachVector.scale(attachDst));
             }
 
-            if (stepAttr != null) stepAttr.setBaseValue(stepHeight);
+            mob.setMaxUpStep(stepHeight);
 
             if (!mob.onGround()) {
                 mob.setBoundingBox(aabb);
@@ -532,11 +520,25 @@ public class ClimberComponent {
 
     private Vec3 getStickingForce(Pair<Direction, Vec3> walkingSide) {
         double uprightness = Math.max(attachmentNormal.y, 0);
-        double gravity = mob.getGravity();
+        double gravity = this.getGravity();
         double stickingForce = gravity * uprightness + 0.08D * (1 - uprightness);
         return walkingSide.getRight().scale(stickingForce);
     }
+    private double getGravity() {
+        if(mob.isNoGravity()) {
+            return 0;
+        }
 
+        double gravity = 0.08d;
+
+        boolean isFalling = mob.getDeltaMovement().y <= 0.0D;
+
+        if(isFalling && mob.hasEffect(MobEffects.SLOW_FALLING)) {
+            gravity = 0.1D;
+        }
+
+        return gravity;
+    }
     // ==================== ORIENTATION LOGIC ====================
 
     public void updateOffsetsAndOrientation() {

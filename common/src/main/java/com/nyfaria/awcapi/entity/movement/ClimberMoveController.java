@@ -1,20 +1,15 @@
 package com.nyfaria.awcapi.entity.movement;
 
-import com.nyfaria.awcapi.entity.IAdvancedClimber;
-import com.nyfaria.awcapi.entity.Orientation;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.util.Mth;
-import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.ai.control.MoveControl;
-import net.minecraft.world.entity.ai.navigation.PathNavigation;
-import net.minecraft.world.level.pathfinder.PathType;
-import net.minecraft.world.level.pathfinder.NodeEvaluator;
-import net.minecraft.world.level.pathfinder.PathfindingContext;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.VoxelShape;
-import org.jetbrains.annotations.Nullable;
+import com.nyfaria.awcapi.entity.*;
+import net.minecraft.core.*;
+import net.minecraft.util.*;
+import net.minecraft.world.entity.*;
+import net.minecraft.world.entity.ai.control.*;
+import net.minecraft.world.entity.ai.navigation.*;
+import net.minecraft.world.level.pathfinder.*;
+import net.minecraft.world.phys.*;
+import net.minecraft.world.phys.shapes.*;
+import org.jetbrains.annotations.*;
 
 /**
  * Move controller for wall-climbing entities.
@@ -274,7 +269,7 @@ public class ClimberMoveController<T extends Mob & IAdvancedClimber> extends Mov
         if (navigator != null) {
             NodeEvaluator processor = navigator.getNodeEvaluator();
 
-            if (processor != null && processor.getPathType(new PathfindingContext(this.mob.level(), this.mob), Mth.floor(this.mob.getX() + x), Mth.floor(this.mob.getY() + this.mob.getBbHeight() * 0.5f + y), Mth.floor(this.mob.getZ() + z)) != PathType.WALKABLE) {
+            if(processor != null && processor.getBlockPathType(this.mob.level(), Mth.floor(this.mob.getX() + x), Mth.floor(this.mob.getY() + this.mob.getBbHeight() * 0.5f + y), Mth.floor(this.mob.getZ() + z)) != BlockPathTypes.WALKABLE) {
                 return false;
             }
         }

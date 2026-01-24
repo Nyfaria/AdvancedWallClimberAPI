@@ -64,10 +64,7 @@ public class ClimberHelper {
         climber.moveControl = new ClimberMoveController<>(climber);
         climber.lookControl = new ClimberLookController<>(climber);
         climber.jumpControl = new ClimberJumpController<>(climber);
-        AttributeInstance stepHeight = climber.getAttribute(Attributes.STEP_HEIGHT);
-        if (stepHeight != null) {
-            stepHeight.setBaseValue(0.1);
-        }
+        climber.setMaxUpStep(0.1f); // Prevent default step-up behavior
         // Note: Move, look, and jump controllers must be set from within the entity class
         // as they are protected fields
     }

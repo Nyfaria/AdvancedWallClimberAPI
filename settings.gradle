@@ -1,4 +1,5 @@
 pluginManagement {
+
     repositories {
         gradlePluginPortal()
         mavenCentral()
@@ -20,13 +21,14 @@ pluginManagement {
             }
             filter {
                 includeGroup("net.fabricmc")
+                includeGroup('net.fabricmc.unpick')
                 includeGroup("fabric-loom")
             }
         }
         exclusiveContent {
             forRepository {
                 maven {
-                    name = 'NeoForge'
+                    name = 'forge'
                     url = uri("https://maven.neoforged.net/releases")
                 }
             }
@@ -47,15 +49,32 @@ pluginManagement {
                 includeGroup("net.minecraftforge")
             }
         }
+        maven {
+            name '100Media'
+            url 'https://maven.100media.dev'
+        }
     }
 }
+
 
 plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
 }
-
+dependencyResolutionManagement {
+    versionCatalogs {
+        create("libs") {
+            from("com.nyfaria:versions-catalog-${minecraft_version}:latest.release")
+        }
+    }
+    repositories {
+        maven {
+            name "100mediaReleases"
+            url "https://maven.100media.dev/releases"
+        }
+    }
+}
 // This should match the folder name of the project, or else IDEA may complain (see https://youtrack.jetbrains.com/issue/IDEA-317606)
-rootProject.name = 'AdvancedWallClimberAPI'
+rootProject.name = "AdvancedWallClimberAPI"
 include("common")
 include("fabric")
 include("neoforge")

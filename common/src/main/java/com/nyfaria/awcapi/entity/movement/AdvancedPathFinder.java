@@ -1,20 +1,10 @@
 package com.nyfaria.awcapi.entity.movement;
 
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.world.level.pathfinder.PathType;
-import net.minecraft.world.level.pathfinder.Node;
-import net.minecraft.world.level.pathfinder.NodeEvaluator;
-import net.minecraft.world.level.pathfinder.Path;
-import org.jetbrains.annotations.Nullable;
+import net.minecraft.core.*;
+import net.minecraft.world.level.pathfinder.*;
+import org.jetbrains.annotations.*;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Advanced pathfinder that handles multi-directional path transitions for wall climbing.
@@ -121,7 +111,7 @@ public class AdvancedPathFinder extends CustomPathFinder {
     }
 
     private static boolean isOmnidirectionalPoint(DirectionalPathPoint point) {
-        return point.type == PathType.WATER || point.type == PathType.LAVA;
+        return point.type == BlockPathTypes.WATER || point.type == BlockPathTypes.LAVA;
     }
 
     private TPONode retraceSidedPath(List<Node> points, boolean isReversed) {

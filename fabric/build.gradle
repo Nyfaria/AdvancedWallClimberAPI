@@ -1,21 +1,23 @@
 plugins {
     id 'multiloader-loader'
-    id 'fabric-loom'
-    id "me.modmuss50.mod-publish-plugin" version "0.5.1"
-    id 'maven-publish'
+    alias(libs.plugins.loom.fabric)
+    alias(libs.plugins.mod.publish)
 }
 
+configurations.all {
+    resolutionStrategy.cacheDynamicVersionsFor(1, "seconds")
+}
+
+sourceSets.main.resources { srcDir project(":common").file('src/generated/resources').getAbsolutePath() }
 
 dependencies {
     minecraft "com.mojang:minecraft:${minecraft_version}"
     mappings loom.layered() {
         officialMojangMappings()
-//        parchment("org.parchmentmc.data:parchment-1.20.6:2024.05.01@zip")
+        parchment("org.parchmentmc.data:parchment-${libs.versions.parchment.minecraft.get()}:${libs.versions.parchment.version.get()}@zip")
     }
-    modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
-    modApi "fuzs.forgeconfigapiport:forgeconfigapiport-fabric:${project.forge_config_api_port_version}"
-    include "fuzs.forgeconfigapiport:forgeconfigapiport-fabric:${project.forge_config_api_port_version}"
+    modImplementation libs.fabric.loader
+    modImplementation libs.fabric.api
 }
 
 loom {
@@ -42,57 +44,6 @@ loom {
     }
 }
 
-publishing {
-    publications {
-        awcapi(MavenPublication) {
-            groupId = project.group
-            artifactId = "${mod_id}-fabric"
-            version = "${project.version}+${minecraft_version}"
-
-            afterEvaluate {
-                artifact tasks.named("remapJar")
-            }
-
-            pom {
-                name = "${mod_name} (Fabric)"
-                description = project.description ?: 'An API for advanced wall climbing mechanics.'
-                url = 'https://github.com/Nyfaria/AdvancedWallClimberAPI'
-
-                licenses {
-                    license {
-                        name = 'All Rights Reserved'
-                        url = 'https://github.com/Nyfaria/AdvancedWallClimberAPI'
-                    }
-                }
-
-                developers {
-                    developer {
-                        id = 'nyfaria'
-                        name = 'Nyfaria'
-                    }
-                }
-
-                scm {
-                    connection = 'scm:git:git://github.com/Nyfaria/AdvancedWallClimberAPI.git'
-                    developerConnection = 'scm:git:ssh://github.com/Nyfaria/AdvancedWallClimberAPI.git'
-                    url = 'https://github.com/Nyfaria/AdvancedWallClimberAPI'
-                }
-            }
-        }
-    }
-
-    repositories {
-        maven {
-            name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/Nyfaria/AdvancedWallClimberAPI")
-            credentials {
-                username = System.getenv("GITHUB_ACTOR") ?: findProperty("gpr.user") ?: ""
-                password = System.getenv("GITHUB_TOKEN") ?: findProperty("gpr.key") ?: ""
-            }
-        }
-    }
-}
-
 publishMods {
     file = remapJar.archiveFile
     changelog = project(":common").file("changelog.md").text
@@ -100,28 +51,22 @@ publishMods {
     modLoaders.add("fabric")
     displayName = "${mod_name}-${minecraft_version}-[Fabric]-${project.version}"
     dryRun = dry_run.toBoolean()
-}
-
-if (curseforge_publishing_enabled.toBoolean()) {
-    publishMods {
+    if (curseforge_publishing_enabled.toBoolean()) {
         curseforge {
             projectId = curseforge_project_id
-            accessToken = providers.environmentVariable("curseforge_token")
+            accessToken = curseforge_token
             minecraftVersions.add(minecraft_version)
             clientRequired = true
             serverRequired = true
-            javaVersions.add(JavaVersion.VERSION_21)
+            javaVersions.add(JavaVersion.VERSION_17)
             requires {
                 slug = "fabric-api"
             }
         }
     }
-}
-
-if (modrinth_publishing_enabled.toBoolean()) {
-    publishMods {
+    if (modrinth_publishing_enabled.toBoolean()) {
         modrinth {
-            accessToken = providers.environmentVariable("modrinth_token")
+            accessToken = modrinth_token
             projectId = modrinth_project_id
             minecraftVersions.add(minecraft_version)
             requires {

@@ -5,8 +5,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.level.pathfinder.PathType;
-import net.minecraft.world.level.pathfinder.Node;
+import net.minecraft.world.level.pathfinder.*;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.function.Predicate;
@@ -50,7 +49,7 @@ public interface IAdvancedPathFindingEntity {
     }
 
     /**
-     * Returns the pathing malus for the given {@link PathType} and block position.
+     * Returns the pathing malus for the given {@link BlockPathTypes} and block position.
      * Nodes with negative values are avoided at all cost. Nodes with value 0.0 have the highest priority, i.e.
      * are preferred over all other nodes. Nodes with a positive value incur an additional travel cost of the same magnitude
      * and the higher their value the less they are preferred. Note that the additional travel cost increases the path's "length" (i.e. cost)
@@ -63,7 +62,7 @@ public interface IAdvancedPathFindingEntity {
      * @param sides Predicate for valid sides
      * @return The malus value
      */
-    default float getPathingMalus(BlockGetter cache, Mob entity, PathType nodeType, BlockPos pos, Vec3i direction, Predicate<Direction> sides) {
+    default float getPathingMalus(BlockGetter cache, Mob entity, BlockPathTypes nodeType, BlockPos pos, Vec3i direction, Predicate<Direction> sides) {
         return entity.getPathfindingMalus(nodeType);
     }
 
