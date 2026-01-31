@@ -947,7 +947,7 @@ public class AdvancedWalkNodeProcessor extends WalkNodeEvaluator {
         PathType nodeType = getRawPathNodeTypeCached(rawPathNodeTypeCache, blockaccessIn, pos.set(x, y, z));
         boolean isWalkable = false;
 
-        if(nodeType == PathType.OPEN && y >= blockaccessIn.level().getMinBuildHeight() + 1) {
+        if(pathableFacings != null && nodeType == PathType.OPEN && y >= blockaccessIn.level().getMinBuildHeight() + 1) {
             for(int i = 0; i < pathableFacings.length; i++) {
                 Direction pathableFacing = pathableFacings[i];
 
