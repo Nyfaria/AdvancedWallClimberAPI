@@ -9,11 +9,6 @@ configurations.all {
     resolutionStrategy.cacheDynamicVersionsFor(1, "seconds")
 }
 
-mixin {
-    add(sourceSets.main, "${mod_id}.refmap.json")
-
-    config("${mod_id}.mixins.json")
-}
 
 legacyForge {
     version = libs.versions.common.minecraft.get()
@@ -54,20 +49,12 @@ sourceSets.main.resources { srcDir project(":common").file('src/generated/resour
 
 dependencies {
     compileOnly(project(":common"))
-    annotationProcessor(libs.mixin) {
-        artifact {
-            classifier = 'processor'
-        }
-    }
 }
 jar {
     finalizedBy('reobfJar')
-    manifest.attributes([
-            "MixinConfigs": "${mod_id}.mixins.json"
-    ])
 }
 publishMods {
-    file = jar.archiveFile
+    file = reobfJar.archiveFile
     changelog = project(":common").file("changelog.md").text
     type = STABLE
     modLoaders.add("forge")

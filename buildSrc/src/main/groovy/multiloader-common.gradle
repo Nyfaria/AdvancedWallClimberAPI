@@ -111,8 +111,6 @@ publishing {
         }
     }
     repositories {
-        maven {
-            url System.getenv("local_maven_url")
-        }
+        maven hundredMedia.getPublishing100MediaMaven()
     }
 }

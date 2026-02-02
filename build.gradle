@@ -2,6 +2,7 @@ plugins {
     // Required for NeoGradle
     alias(libs.plugins.loom) apply false
     alias(libs.plugins.mdg) apply false
+    id 'dev._100media.gradleutils' version '1.+'
     // The plugin is located at the Gradle plugin portal
 }
 
