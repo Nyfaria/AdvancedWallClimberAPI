@@ -42,56 +42,6 @@ loom {
     }
 }
 
-publishing {
-    publications {
-        awcapi(MavenPublication) {
-            groupId = project.group
-            artifactId = "${mod_id}-fabric"
-            version = "${project.version}+${minecraft_version}"
-
-            afterEvaluate {
-                artifact tasks.named("remapJar")
-            }
-
-            pom {
-                name = "${mod_name} (Fabric)"
-                description = project.description ?: 'An API for advanced wall climbing mechanics.'
-                url = 'https://github.com/Nyfaria/AdvancedWallClimberAPI'
-
-                licenses {
-                    license {
-                        name = 'All Rights Reserved'
-                        url = 'https://github.com/Nyfaria/AdvancedWallClimberAPI'
-                    }
-                }
-
-                developers {
-                    developer {
-                        id = 'nyfaria'
-                        name = 'Nyfaria'
-                    }
-                }
-
-                scm {
-                    connection = 'scm:git:git://github.com/Nyfaria/AdvancedWallClimberAPI.git'
-                    developerConnection = 'scm:git:ssh://github.com/Nyfaria/AdvancedWallClimberAPI.git'
-                    url = 'https://github.com/Nyfaria/AdvancedWallClimberAPI'
-                }
-            }
-        }
-    }
-
-    repositories {
-        maven {
-            name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/Nyfaria/AdvancedWallClimberAPI")
-            credentials {
-                username = System.getenv("GITHUB_ACTOR") ?: findProperty("gpr.user") ?: ""
-                password = System.getenv("GITHUB_TOKEN") ?: findProperty("gpr.key") ?: ""
-            }
-        }
-    }
-}
 
 publishMods {
     file = remapJar.archiveFile
@@ -106,7 +56,7 @@ if (curseforge_publishing_enabled.toBoolean()) {
     publishMods {
         curseforge {
             projectId = curseforge_project_id
-            accessToken = providers.environmentVariable("curseforge_token")
+            accessToken = curseforge_token
             minecraftVersions.add(minecraft_version)
             clientRequired = true
             serverRequired = true
@@ -121,7 +71,7 @@ if (curseforge_publishing_enabled.toBoolean()) {
 if (modrinth_publishing_enabled.toBoolean()) {
     publishMods {
         modrinth {
-            accessToken = providers.environmentVariable("modrinth_token")
+            accessToken = modrinth_token
             projectId = modrinth_project_id
             minecraftVersions.add(minecraft_version)
             requires {

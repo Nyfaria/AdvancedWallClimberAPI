@@ -14,17 +14,7 @@ neoForge {
         minecraftVersion = parchment_minecraft
         mappingsVersion = parchment_version
     }
-    runs {
-        client {
-            client()
-        }
-        server {
-            server()
-        }
-        data {
-            data()
-        }
-    }
+
 }
 repositories {
     maven { url "https://maven.fabricmc.net/" }
@@ -50,56 +40,5 @@ configurations {
 artifacts {
     commonJava sourceSets.main.java.sourceDirectories.singleFile
     commonResources sourceSets.main.resources.sourceDirectories.singleFile
-}
-
-publishing {
-    publications {
-        awcapi(MavenPublication) {
-            groupId = project.group
-            artifactId = "${mod_id}-common"
-            version = "${project.version}+${minecraft_version}"
-
-            afterEvaluate {
-                artifact tasks.named("jar")
-            }
-
-            pom {
-                name = mod_name
-                description = project.description ?: 'An API for advanced wall climbing mechanics.'
-                url = 'https://github.com/Nyfaria/AdvancedWallClimberAPI'
-
-                licenses {
-                    license {
-                        name = 'All Rights Reserved'
-                        url = 'https://github.com/Nyfaria/AdvancedWallClimberAPI'
-                    }
-                }
-
-                developers {
-                    developer {
-                        id = 'nyfaria'
-                        name = 'Nyfaria'
-                    }
-                }
-
-                scm {
-                    connection = 'scm:git:git://github.com/Nyfaria/AdvancedWallClimberAPI.git'
-                    developerConnection = 'scm:git:ssh://github.com/Nyfaria/AdvancedWallClimberAPI.git'
-                    url = 'https://github.com/Nyfaria/AdvancedWallClimberAPI'
-                }
-            }
-        }
-    }
-
-    repositories {
-        maven {
-            name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/Nyfaria/AdvancedWallClimberAPI")
-            credentials {
-                username = System.getenv("GITHUB_ACTOR") ?: findProperty("gpr.user") ?: ""
-                password = System.getenv("GITHUB_TOKEN") ?: findProperty("gpr.key") ?: ""
-            }
-        }
-    }
 }
 

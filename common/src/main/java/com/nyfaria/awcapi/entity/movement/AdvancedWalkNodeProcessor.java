@@ -47,7 +47,7 @@ public class AdvancedWalkNodeProcessor extends WalkNodeEvaluator {
     protected boolean checkObstructions;
     protected int pathingSizeOffsetX, pathingSizeOffsetY, pathingSizeOffsetZ;
     protected EnumSet<Direction> pathableFacings = EnumSet.of(Direction.DOWN);
-    protected Direction[] pathableFacingsArray;
+    protected Direction[] pathableFacingsArray = new Direction[]{Direction.DOWN};
 
     private final Long2LongMap pathNodeTypeCache = new Long2LongOpenHashMap();
     private final Long2ObjectMap<PathType> rawPathNodeTypeCache = new Long2ObjectOpenHashMap<>();
