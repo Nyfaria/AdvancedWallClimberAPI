@@ -44,6 +44,11 @@ pluginManagement {
                 includeGroup("net.minecraftforge")
             }
         }
+
+        maven {
+            name '100Media'
+            url 'https://maven.100media.dev'
+        }
     }
 }
 
