@@ -15,6 +15,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.CollisionGetter;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -30,6 +31,7 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -38,21 +40,33 @@ import java.util.Optional;
  * Attach this to your entity and delegate climbing-related methods to it.
  */
 public class ClimberComponent {
+    private static final Vec3 UP = new Vec3(0, 1, 0);
+    private static final int MAX_ATTACHED_TICKS = 5;
+    private static final int SOLVE_ITERATIONS = 3;
+    private static final double SOLVE_CONVERGENCE_DOT = 0.9999D;
+    private static final int SOLVE_REFRESH_TICKS = 10;
+    private static final double SOLVE_REUSE_DISTANCE_SQ = 1.0E-8D;
+    private static final double CONTACT_OVERLAP_MARGIN = 0.2D;
+    private static final double CONTACT_DISTANCE = 0.05D;
+    private static final double MIN_ATTACH_DIRECTION = 0.25D;
+    private static final double BLOCKED_MOVEMENT_RATIO = 0.35D;
+    private static final double CLIPPED_MOVEMENT_RATIO = 0.7D;
+    private static final double MIN_CLIMB_DIRECTION = 0.1D;
+    private static final int DETACH_TICKS = 8;
+
     private final Mob mob;
     private final IAdvancedClimber climber;
 
     private double prevAttachmentOffsetX, prevAttachmentOffsetY, prevAttachmentOffsetZ;
     private double attachmentOffsetX, attachmentOffsetY, attachmentOffsetZ;
 
-    private Vec3 attachmentNormal = new Vec3(0, 1, 0);
-    private Vec3 prevAttachmentNormal = new Vec3(0, 1, 0);
-
-    private float orientationYawDelta;
+    private Vec3 attachmentNormal = UP;
+    private Vec3 prevAttachmentNormal = UP;
 
     private double lastAttachmentOffsetX, lastAttachmentOffsetY, lastAttachmentOffsetZ;
-    private Vec3 lastAttachmentOrientationNormal = new Vec3(0, 1, 0);
+    private Vec3 lastAttachmentOrientationNormal = UP;
 
-    private int attachedTicks = 5;
+    private int attachedTicks = MAX_ATTACHED_TICKS;
 
     private Vec3 attachedSides = new Vec3(0, 0, 0);
     private Vec3 prevAttachedSides = new Vec3(0, 0, 0);
@@ -67,6 +81,7 @@ public class ClimberComponent {
 
     private Orientation orientation;
     private Pair<Direction, Vec3> groundDirection = Pair.of(Direction.DOWN, new Vec3(0, -1, 0));
+    private final double[] facingDistances = new double[Direction.values().length];
 
     private Orientation renderOrientation;
 
@@ -75,6 +90,15 @@ public class ClimberComponent {
     private double preMoveY;
 
     private Vec3 jumpDir;
+
+    private int detachTicks;
+    private boolean detachOnJump;
+
+    private boolean hasSolve;
+    private boolean solvedAttached;
+    private boolean solveConverged;
+    private double solvedX, solvedY, solvedZ;
+    private int ticksSinceSolve;
 
     // Data for syncing
     private float movementTargetX, movementTargetY, movementTargetZ;
@@ -95,22 +119,37 @@ public class ClimberComponent {
         this.climber = (IAdvancedClimber) mob;
         this.orientation = calculateOrientation(1);
         this.groundDirection = getGroundDirection();
+        Arrays.fill(this.facingDistances, Double.MAX_VALUE);
     }
 
     public void writeToNbt(CompoundTag nbt) {
         nbt.putDouble("awcapi.AttachmentNormalX", this.attachmentNormal.x);
         nbt.putDouble("awcapi.AttachmentNormalY", this.attachmentNormal.y);
         nbt.putDouble("awcapi.AttachmentNormalZ", this.attachmentNormal.z);
+        nbt.putDouble("awcapi.LastAttachmentNormalX", this.lastAttachmentOrientationNormal.x);
+        nbt.putDouble("awcapi.LastAttachmentNormalY", this.lastAttachmentOrientationNormal.y);
+        nbt.putDouble("awcapi.LastAttachmentNormalZ", this.lastAttachmentOrientationNormal.z);
+        nbt.putDouble("awcapi.LastAttachmentOffsetX", this.lastAttachmentOffsetX);
+        nbt.putDouble("awcapi.LastAttachmentOffsetY", this.lastAttachmentOffsetY);
+        nbt.putDouble("awcapi.LastAttachmentOffsetZ", this.lastAttachmentOffsetZ);
         nbt.putInt("awcapi.AttachedTicks", this.attachedTicks);
     }
 
     public void readFromNbt(CompoundTag nbt) {
-        this.prevAttachmentNormal = this.attachmentNormal = new Vec3(
-                nbt.getDoubleOr("awcapi.AttachmentNormalX",0),
-                nbt.getDoubleOr("awcapi.AttachmentNormalY",0),
-                nbt.getDoubleOr("awcapi.AttachmentNormalZ",0)
-        );
-        this.attachedTicks = nbt.getIntOr("awcapi.AttachedTicks",0);
+        this.attachmentNormal = safeNormalize(new Vec3(
+                nbt.getDoubleOr("awcapi.AttachmentNormalX", 0),
+                nbt.getDoubleOr("awcapi.AttachmentNormalY", 1),
+                nbt.getDoubleOr("awcapi.AttachmentNormalZ", 0)), UP);
+        this.prevAttachmentNormal = this.attachmentNormal;
+        this.lastAttachmentOrientationNormal = safeNormalize(new Vec3(
+                nbt.getDoubleOr("awcapi.LastAttachmentNormalX", this.attachmentNormal.x),
+                nbt.getDoubleOr("awcapi.LastAttachmentNormalY", this.attachmentNormal.y),
+                nbt.getDoubleOr("awcapi.LastAttachmentNormalZ", this.attachmentNormal.z)), this.attachmentNormal);
+        this.lastAttachmentOffsetX = nbt.getDoubleOr("awcapi.LastAttachmentOffsetX", 0);
+        this.lastAttachmentOffsetY = nbt.getDoubleOr("awcapi.LastAttachmentOffsetY", 0);
+        this.lastAttachmentOffsetZ = nbt.getDoubleOr("awcapi.LastAttachmentOffsetZ", 0);
+        this.attachedTicks = Mth.clamp(nbt.getIntOr("awcapi.AttachedTicks", MAX_ATTACHED_TICKS), 0, MAX_ATTACHED_TICKS);
+        this.hasSolve = false;
         this.orientation = calculateOrientation(1);
     }
 
@@ -136,6 +175,7 @@ public class ClimberComponent {
 
     public void setCollisionsInclusionRange(float range) {
         this.collisionsInclusionRange = range;
+        this.hasSolve = false;
     }
 
     public float getCollisionsSmoothingRange() {
@@ -144,6 +184,7 @@ public class ClimberComponent {
 
     public void setCollisionsSmoothingRange(float range) {
         this.collisionsSmoothingRange = range;
+        this.hasSolve = false;
     }
 
     public float getMovementSpeed() {
@@ -157,6 +198,10 @@ public class ClimberComponent {
 
     public Direction getGroundSide() {
         return groundDirection.getKey();
+    }
+
+    public boolean isTouchingSide(Direction side) {
+        return groundDirection.getKey() == side || facingDistances[side.ordinal()] < CONTACT_DISTANCE;
     }
 
     public Orientation getOrientation() {
@@ -185,6 +230,10 @@ public class ClimberComponent {
 
     public Vec3 getJumpDirection() {
         return jumpDir;
+    }
+
+    public void setDetachOnJump(boolean detach) {
+        this.detachOnJump = detach;
     }
 
     public Vec3 getAttachmentNormal() {
@@ -267,8 +316,16 @@ public class ClimberComponent {
      * Call this in the entity's aiStep/livingTick method.
      */
     public void livingTick() {
+        if (detachTicks > 0) {
+            detachTicks--;
+        }
+
+        prevAttachmentOffsetX = attachmentOffsetX;
+        prevAttachmentOffsetY = attachmentOffsetY;
+        prevAttachmentOffsetZ = attachmentOffsetZ;
+        prevAttachmentNormal = attachmentNormal;
+
         updateWalkingSide();
-        updateOffsetsAndOrientation();
     }
 
     // ==================== WALKING SIDE LOGIC ====================
@@ -281,24 +338,15 @@ public class ClimberComponent {
 
         float stickingDistance = mob.zza != 0 ? 1.5f : 0.1f;
 
+        AABB grownBox = entityBox.inflate(0.2f);
+        List<AABB> collisionBoxes = getCollisionBoxes(grownBox.inflate(stickingDistance));
+
+        if (!computeFacingDistances(collisionBoxes, entityBox, grownBox, stickingDistance, 0.0D)) {
+            computeFacingDistances(collisionBoxes, entityBox, grownBox, stickingDistance, CONTACT_OVERLAP_MARGIN);
+        }
+
         for (Direction facing : Direction.values()) {
-            List<AABB> collisionBoxes = getCollisionBoxes(entityBox.inflate(0.2f).expandTowards(
-                    facing.getStepX() * stickingDistance,
-                    facing.getStepY() * stickingDistance,
-                    facing.getStepZ() * stickingDistance));
-
-            double closestDst = Double.MAX_VALUE;
-
-            for (AABB collisionBox : collisionBoxes) {
-                switch (facing) {
-                    case EAST, WEST ->
-                            closestDst = Math.min(closestDst, Math.abs(calculateXOffset(entityBox, collisionBox, -facing.getStepX() * stickingDistance)));
-                    case UP, DOWN ->
-                            closestDst = Math.min(closestDst, Math.abs(calculateYOffset(entityBox, collisionBox, -facing.getStepY() * stickingDistance)));
-                    case NORTH, SOUTH ->
-                            closestDst = Math.min(closestDst, Math.abs(calculateZOffset(entityBox, collisionBox, -facing.getStepZ() * stickingDistance)));
-                }
-            }
+            double closestDst = facingDistances[facing.ordinal()];
 
             if (closestDst < closestFacingDst) {
                 closestFacingDst = closestDst;
@@ -313,8 +361,44 @@ public class ClimberComponent {
         if (closestFacing == null) {
             groundDirection = Pair.of(Direction.DOWN, new Vec3(0, -1, 0));
         } else {
-            groundDirection = Pair.of(closestFacing, weighting.normalize().add(0, -0.001f, 0).normalize());
+            groundDirection = Pair.of(closestFacing, safeNormalize(safeNormalize(weighting, new Vec3(0, -1, 0)).add(0, -0.001f, 0), new Vec3(0, -1, 0)));
         }
+    }
+
+    private boolean computeFacingDistances(List<AABB> collisionBoxes, AABB entityBox, AABB grownBox, float stickingDistance, double margin) {
+        boolean contact = false;
+
+        for (Direction facing : Direction.values()) {
+            AABB facingRegion = grownBox.expandTowards(
+                    facing.getStepX() * stickingDistance,
+                    facing.getStepY() * stickingDistance,
+                    facing.getStepZ() * stickingDistance);
+
+            double closestDst = Double.MAX_VALUE;
+
+            for (AABB collisionBox : collisionBoxes) {
+                if (!collisionBox.intersects(facingRegion)) {
+                    continue;
+                }
+
+                switch (facing) {
+                    case EAST, WEST ->
+                            closestDst = Math.min(closestDst, Math.abs(calculateXOffset(entityBox, collisionBox, -facing.getStepX() * stickingDistance, margin)));
+                    case UP, DOWN ->
+                            closestDst = Math.min(closestDst, Math.abs(calculateYOffset(entityBox, collisionBox, -facing.getStepY() * stickingDistance, margin)));
+                    case NORTH, SOUTH ->
+                            closestDst = Math.min(closestDst, Math.abs(calculateZOffset(entityBox, collisionBox, -facing.getStepZ() * stickingDistance, margin)));
+                }
+            }
+
+            facingDistances[facing.ordinal()] = closestDst;
+
+            if (closestDst < stickingDistance - 1.0E-6D) {
+                contact = true;
+            }
+        }
+
+        return contact;
     }
 
     // ==================== TRAVEL LOGIC ====================
@@ -350,7 +434,6 @@ public class ClimberComponent {
                 mob.calculateEntityAnimation(true);
             }
 
-            updateOffsetsAndOrientation();
             return true;
         } else {
             updateOffsetsAndOrientation();
@@ -366,7 +449,7 @@ public class ClimberComponent {
         Vec3 upVector = orientation.getGlobal(mob.getYRot(), -90.0f);
 
         Pair<Direction, Vec3> groundDirection = getGroundDirection();
-        Vec3 stickingForce = getStickingForce(groundDirection);
+        Vec3 stickingForce = detachTicks > 0 ? new Vec3(0, -mob.getGravity(), 0) : getStickingForce(groundDirection);
 
         boolean isFalling = mob.getDeltaMovement().y <= 0.0D;
         if (isFalling && mob.hasEffect(MobEffects.SLOW_FALLING)) {
@@ -396,34 +479,34 @@ public class ClimberComponent {
                         forwardVector.y * forward + strafeVector.y * strafe,
                         forwardVector.z * forward + strafeVector.z * strafe);
 
-                double px = mob.getX();
-                double py = mob.getY();
-                double pz = mob.getZ();
-                Vec3 motion = mob.getDeltaMovement();
                 AABB aabb = mob.getBoundingBox();
 
-                mob.move(MoverType.SELF, movementOffset);
+                Vec3 allowedMovement = collide(aabb, movementOffset);
+                double requestedLength = movementOffset.length();
+                double blockedLength = movementOffset.subtract(allowedMovement).length();
 
-                Vec3 movementDir = new Vec3(mob.getX() - px, mob.getY() - py, mob.getZ() - pz).normalize();
+                if (requestedLength > 1.0E-6D && (allowedMovement.length() < BLOCKED_MOVEMENT_RATIO * requestedLength || blockedLength > CLIPPED_MOVEMENT_RATIO * requestedLength)) {
+                    Vec3 climbDir = getObstacleClimbDirection(movementOffset, allowedMovement, upVector);
+                    if (climbDir != null) {
+                        Vec3 climbMovement = collide(aabb, climbDir.scale(requestedLength));
+                        if (climbMovement.length() > 0.5D * requestedLength) {
+                            allowedMovement = climbMovement;
+                        }
+                    }
+                }
 
-                mob.setBoundingBox(aabb);
-                setLocationFromBoundingbox();
-                mob.setDeltaMovement(motion);
+                Vec3 movementDir = allowedMovement.normalize();
 
                 Vec3 probeVector = new Vec3(
                         Math.abs(movementDir.x) < 0.001D ? -Math.signum(upVector.x) : 0,
                         Math.abs(movementDir.y) < 0.001D ? -Math.signum(upVector.y) : 0,
                         Math.abs(movementDir.z) < 0.001D ? -Math.signum(upVector.z) : 0).normalize().scale(0.0001D);
-                mob.move(MoverType.SELF, probeVector);
+                Vec3 probed = collide(aabb, probeVector);
 
                 Vec3 collisionNormal = new Vec3(
-                        Math.abs(mob.getX() - px - probeVector.x) > 0.000001D ? Math.signum(-probeVector.x) : 0,
-                        Math.abs(mob.getY() - py - probeVector.y) > 0.000001D ? Math.signum(-probeVector.y) : 0,
-                        Math.abs(mob.getZ() - pz - probeVector.z) > 0.000001D ? Math.signum(-probeVector.z) : 0).normalize();
-
-                mob.setBoundingBox(aabb);
-                setLocationFromBoundingbox();
-                mob.setDeltaMovement(motion);
+                        Math.abs(probed.x - probeVector.x) > 0.000001D ? Math.signum(-probeVector.x) : 0,
+                        Math.abs(probed.y - probeVector.y) > 0.000001D ? Math.signum(-probeVector.y) : 0,
+                        Math.abs(probed.z - probeVector.z) > 0.000001D ? Math.signum(-probeVector.z) : 0).normalize();
 
                 Vec3 surfaceMovementDir = movementDir.subtract(collisionNormal.scale(collisionNormal.dot(movementDir))).normalize();
                 boolean isInnerCorner = Math.abs(collisionNormal.x) + Math.abs(collisionNormal.y) + Math.abs(collisionNormal.z) > 1.0001f;
@@ -474,56 +557,121 @@ public class ClimberComponent {
         boolean detachedX = attachedSides.x != prevAttachedSides.x && Math.abs(attachedSides.x) < 0.001D;
         boolean detachedY = attachedSides.y != prevAttachedSides.y && Math.abs(attachedSides.y) < 0.001D;
         boolean detachedZ = attachedSides.z != prevAttachedSides.z && Math.abs(attachedSides.z) < 0.001D;
+        boolean stillAttached = Math.abs(attachedSides.x) > 0.001D || Math.abs(attachedSides.y) > 0.001D || Math.abs(attachedSides.z) > 0.001D;
 
-        if (detachedX || detachedY || detachedZ) {
-            float stepHeight = mob.maxUpStep();
-            AttributeInstance stepAttr = mob.getAttribute(Attributes.STEP_HEIGHT);
-            if (stepAttr != null) stepAttr.setBaseValue(0);
-            boolean prevOnGround = mob.onGround();
-            boolean prevCollidedHorizontally = mob.horizontalCollision;
-            boolean prevCollidedVertically = mob.verticalCollision;
+        if (detachTicks > 0 && detachTicks < DETACH_TICKS && mob.onGround()) {
+            detachTicks = 0;
+        }
 
-            mob.move(MoverType.SELF, new Vec3(
-                    detachedX ? -prevAttachedSides.x * 0.25f : 0,
-                    detachedY ? -prevAttachedSides.y * 0.25f : 0,
-                    detachedZ ? -prevAttachedSides.z * 0.25f : 0));
-
-            Vec3 axis = prevAttachedSides.normalize();
-            Vec3 attachVector = upVector.scale(-1);
-            attachVector = attachVector.subtract(axis.scale(axis.dot(attachVector)));
-
-            if (Math.abs(attachVector.x) > Math.abs(attachVector.y) && Math.abs(attachVector.x) > Math.abs(attachVector.z)) {
-                attachVector = new Vec3(Math.signum(attachVector.x), 0, 0);
-            } else if (Math.abs(attachVector.y) > Math.abs(attachVector.z)) {
-                attachVector = new Vec3(0, Math.signum(attachVector.y), 0);
-            } else {
-                attachVector = new Vec3(0, 0, Math.signum(attachVector.z));
-            }
-
-            double attachDst = motion.length() + 0.1f;
-
-            AABB aabb = mob.getBoundingBox();
-            motion = mob.getDeltaMovement();
-
-            for (int i = 0; i < 2 && !mob.onGround(); i++) {
-                mob.move(MoverType.SELF, attachVector.scale(attachDst));
-            }
-
-            if (stepAttr != null) stepAttr.setBaseValue(stepHeight);
-
-            if (!mob.onGround()) {
-                mob.setBoundingBox(aabb);
-                setLocationFromBoundingbox();
-                mob.setDeltaMovement(motion);
-                mob.setOnGround(prevOnGround);
-                mob.horizontalCollision = prevCollidedHorizontally;
-                mob.verticalCollision = prevCollidedVertically;
-            } else {
-                mob.setDeltaMovement(Vec3.ZERO);
-            }
+        if ((detachedX || detachedY || detachedZ) && !stillAttached && detachTicks == 0) {
+            reattach(upVector, detachedX, detachedY, detachedZ);
         }
 
         mob.calculateEntityAnimation(true);
+    }
+
+    private void reattach(Vec3 upVector, boolean detachedX, boolean detachedY, boolean detachedZ) {
+        Vec3 travel = mob.getDeltaMovement();
+        AttributeInstance stepAttr = mob.getAttribute(Attributes.STEP_HEIGHT);
+        double stepHeight = stepAttr != null ? stepAttr.getBaseValue() : 0;
+        boolean prevOnGround = mob.onGround();
+        boolean prevCollidedHorizontally = mob.horizontalCollision;
+        boolean prevCollidedVertically = mob.verticalCollision;
+
+        if (stepAttr != null) stepAttr.setBaseValue(0);
+        mob.move(MoverType.SELF, new Vec3(
+                detachedX ? -prevAttachedSides.x * 0.25f : 0,
+                detachedY ? -prevAttachedSides.y * 0.25f : 0,
+                detachedZ ? -prevAttachedSides.z * 0.25f : 0));
+        if (stepAttr != null) stepAttr.setBaseValue(stepHeight);
+
+        if (mob.onGround()) {
+            mob.setDeltaMovement(Vec3.ZERO);
+            return;
+        }
+
+        Vec3 attachVector = getReattachDirection(prevAttachedSides, upVector, travel);
+
+        if (attachVector == null) {
+            mob.setOnGround(prevOnGround);
+            mob.horizontalCollision = prevCollidedHorizontally;
+            mob.verticalCollision = prevCollidedVertically;
+            return;
+        }
+
+        Vec3 attachMovement = attachVector.scale(mob.getDeltaMovement().length() + 0.1f);
+
+        AABB box = mob.getBoundingBox();
+        boolean attached = false;
+
+        for (int i = 0; i < 2 && !attached; i++) {
+            Vec3 moved = collide(box, attachMovement);
+            box = box.move(moved);
+            attached = moved.distanceToSqr(attachMovement) > 1.0E-14D;
+        }
+
+        if (attached) {
+            mob.setBoundingBox(box);
+            setLocationFromBoundingbox();
+            mob.setOnGround(true);
+            mob.setDeltaMovement(Vec3.ZERO);
+        } else {
+            mob.setOnGround(prevOnGround);
+            mob.horizontalCollision = prevCollidedHorizontally;
+            mob.verticalCollision = prevCollidedVertically;
+        }
+    }
+
+    @Nullable
+    static Vec3 getReattachDirection(Vec3 detachedSides, Vec3 upVector, Vec3 travel) {
+        Vec3 axis = detachedSides.normalize();
+
+        Vec3 attachVector = removeComponent(upVector.scale(-1), axis);
+        if (attachVector.length() < MIN_ATTACH_DIRECTION) {
+            attachVector = removeComponent(travel.scale(-1), axis);
+            if (attachVector.lengthSqr() < 1.0E-8D) {
+                return null;
+            }
+        }
+
+        if (Math.abs(attachVector.x) >= Math.abs(attachVector.y) && Math.abs(attachVector.x) >= Math.abs(attachVector.z)) {
+            return new Vec3(Math.signum(attachVector.x), 0, 0);
+        } else if (Math.abs(attachVector.y) >= Math.abs(attachVector.z)) {
+            return new Vec3(0, Math.signum(attachVector.y), 0);
+        } else {
+            return new Vec3(0, 0, Math.signum(attachVector.z));
+        }
+    }
+
+    @Nullable
+    static Vec3 getObstacleClimbDirection(Vec3 requested, Vec3 allowed, Vec3 upVector) {
+        double nx = Math.abs(allowed.x - requested.x) > 1.0E-7D ? -Math.signum(requested.x) : 0;
+        double ny = Math.abs(allowed.y - requested.y) > 1.0E-7D ? -Math.signum(requested.y) : 0;
+        double nz = Math.abs(allowed.z - requested.z) > 1.0E-7D ? -Math.signum(requested.z) : 0;
+
+        Vec3 faceNormal = new Vec3(nx, ny, nz);
+        if (faceNormal.lengthSqr() < 1.0E-8D) {
+            return null;
+        }
+        faceNormal = faceNormal.normalize();
+
+        Vec3 climbDir = removeComponent(upVector, faceNormal);
+        if (climbDir.length() < MIN_CLIMB_DIRECTION) {
+            return null;
+        }
+        return climbDir.normalize();
+    }
+
+    private static Vec3 removeComponent(Vec3 vec, Vec3 axis) {
+        return vec.subtract(axis.scale(axis.dot(vec)));
+    }
+
+    private static Vec3 safeNormalize(Vec3 vec, Vec3 fallback) {
+        return vec.lengthSqr() < 1.0E-8D ? fallback : vec.normalize();
+    }
+
+    private Vec3 collide(AABB box, Vec3 movement) {
+        return Entity.collideBoundingBox(mob, movement, box, mob.level(), mob.level().getEntityCollisions(mob, box.expandTowards(movement)));
     }
 
     private float getRelevantMoveFactor(float slipperiness) {
@@ -547,53 +695,38 @@ public class ClimberComponent {
         double baseStickingOffsetX = 0.0f;
         double baseStickingOffsetY = climber.getVerticalOffset(1);
         double baseStickingOffsetZ = 0.0f;
-        Vec3 baseOrientationNormal = new Vec3(0, 1, 0);
+        Vec3 baseOrientationNormal = UP;
 
         if (!isTravelingInFluid && mob.onGround() && mob.getVehicle() == null) {
             Vec3 p = mob.position();
-            Vec3 s = p.add(0, mob.getBbHeight() * 0.5f, 0);
-            AABB inclusionBox = new AABB(s.x, s.y, s.z, s.x, s.y, s.z).inflate(collisionsInclusionRange);
 
-            Pair<Vec3, Vec3> attachmentPoint = CollisionSmoothingUtil.findClosestPoint(
-                    consumer -> forEachCollisonBox(inclusionBox, consumer),
-                    s, attachmentNormal.scale(-1), collisionsSmoothingRange, 1.0f, 0.001f, 20, 0.05f, s);
-
-            AABB entityBox = mob.getBoundingBox();
-
-            if (attachmentPoint != null) {
-                Vec3 attachmentPos = attachmentPoint.getLeft();
-
-                double dx = Math.max(entityBox.minX - attachmentPos.x, attachmentPos.x - entityBox.maxX);
-                double dy = Math.max(entityBox.minY - attachmentPos.y, attachmentPos.y - entityBox.maxY);
-                double dz = Math.max(entityBox.minZ - attachmentPos.z, attachmentPos.z - entityBox.maxZ);
-
-                if (Math.max(dx, Math.max(dy, dz)) < 0.5f) {
-                    isAttached = true;
-
-                    lastAttachmentOffsetX = Mth.clamp(attachmentPos.x - p.x, -mob.getBbWidth() / 2, mob.getBbWidth() / 2);
-                    lastAttachmentOffsetY = Mth.clamp(attachmentPos.y - p.y, 0, mob.getBbHeight());
-                    lastAttachmentOffsetZ = Mth.clamp(attachmentPos.z - p.z, -mob.getBbWidth() / 2, mob.getBbWidth() / 2);
-                    lastAttachmentOrientationNormal = attachmentPoint.getRight();
-                }
+            if (canReuseSolve(p)) {
+                isAttached = solvedAttached;
+                ticksSinceSolve++;
+            } else {
+                isAttached = solveAttachment(p);
+                hasSolve = true;
+                solvedAttached = isAttached;
+                solvedX = p.x;
+                solvedY = p.y;
+                solvedZ = p.z;
+                ticksSinceSolve = 0;
             }
+        } else {
+            hasSolve = false;
         }
-
-        prevAttachmentOffsetX = attachmentOffsetX;
-        prevAttachmentOffsetY = attachmentOffsetY;
-        prevAttachmentOffsetZ = attachmentOffsetZ;
-        prevAttachmentNormal = attachmentNormal;
 
         float attachmentBlend = attachedTicks * 0.2f;
 
         attachmentOffsetX = baseStickingOffsetX + (lastAttachmentOffsetX - baseStickingOffsetX) * attachmentBlend;
         attachmentOffsetY = baseStickingOffsetY + (lastAttachmentOffsetY - baseStickingOffsetY) * attachmentBlend;
         attachmentOffsetZ = baseStickingOffsetZ + (lastAttachmentOffsetZ - baseStickingOffsetZ) * attachmentBlend;
-        attachmentNormal = baseOrientationNormal.add(lastAttachmentOrientationNormal.subtract(baseOrientationNormal).scale(attachmentBlend)).normalize();
+        attachmentNormal = safeNormalize(baseOrientationNormal.add(lastAttachmentOrientationNormal.subtract(baseOrientationNormal).scale(attachmentBlend)), lastAttachmentOrientationNormal);
 
         if (!isAttached) {
             attachedTicks = Math.max(0, attachedTicks - 1);
         } else {
-            attachedTicks = Math.min(5, attachedTicks + 1);
+            attachedTicks = Math.min(MAX_ATTACHED_TICKS, attachedTicks + 1);
         }
 
         orientation = calculateOrientation(1);
@@ -602,8 +735,6 @@ public class ClimberComponent {
 
         float yawDelta = newRotations.getLeft() - mob.getYRot();
         float pitchDelta = newRotations.getRight() - mob.getXRot();
-
-        orientationYawDelta = yawDelta;
 
         mob.setYRot(Mth.wrapDegrees(mob.getYRot() + yawDelta));
         mob.yRotO = wrapAngleInRange(mob.yRotO, mob.getYRot());
@@ -616,6 +747,69 @@ public class ClimberComponent {
 
         mob.setXRot(Mth.wrapDegrees(mob.getXRot() + pitchDelta));
         mob.xRotO = wrapAngleInRange(mob.xRotO, mob.getXRot());
+    }
+
+    private boolean canReuseSolve(Vec3 p) {
+        if (!hasSolve || !solvedAttached || !solveConverged || attachedTicks < MAX_ATTACHED_TICKS || ticksSinceSolve >= SOLVE_REFRESH_TICKS) {
+            return false;
+        }
+        double dx = p.x - solvedX;
+        double dy = p.y - solvedY;
+        double dz = p.z - solvedZ;
+        return dx * dx + dy * dy + dz * dz < SOLVE_REUSE_DISTANCE_SQ;
+    }
+
+    private boolean solveAttachment(Vec3 p) {
+        solveConverged = false;
+
+        Vec3 s = p.add(0, mob.getBbHeight() * 0.5f, 0);
+        AABB inclusionBox = new AABB(s.x, s.y, s.z, s.x, s.y, s.z).inflate(collisionsInclusionRange);
+        List<AABB> boxes = getCollisionBoxes(inclusionBox);
+
+        if (boxes.isEmpty()) {
+            return false;
+        }
+
+        AABB entityBox = mob.getBoundingBox();
+        Vec3 searchNormal = attachmentNormal;
+        boolean attached = false;
+
+        for (int i = 0; i < SOLVE_ITERATIONS; i++) {
+            Pair<Vec3, Vec3> attachmentPoint = CollisionSmoothingUtil.findClosestPoint(
+                    consumer -> boxes.forEach(box -> consumer.consume(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ)),
+                    s, searchNormal.scale(-1), collisionsSmoothingRange, 1.0f, 0.001f, 20, 0.05f, s);
+
+            if (attachmentPoint == null) {
+                break;
+            }
+
+            Vec3 attachmentPos = attachmentPoint.getLeft();
+
+            double dx = Math.max(entityBox.minX - attachmentPos.x, attachmentPos.x - entityBox.maxX);
+            double dy = Math.max(entityBox.minY - attachmentPos.y, attachmentPos.y - entityBox.maxY);
+            double dz = Math.max(entityBox.minZ - attachmentPos.z, attachmentPos.z - entityBox.maxZ);
+
+            if (Math.max(dx, Math.max(dy, dz)) >= 0.5f) {
+                break;
+            }
+
+            Vec3 normal = attachmentPoint.getRight();
+
+            lastAttachmentOffsetX = Mth.clamp(attachmentPos.x - p.x, -mob.getBbWidth() / 2, mob.getBbWidth() / 2);
+            lastAttachmentOffsetY = Mth.clamp(attachmentPos.y - p.y, 0, mob.getBbHeight());
+            lastAttachmentOffsetZ = Mth.clamp(attachmentPos.z - p.z, -mob.getBbWidth() / 2, mob.getBbWidth() / 2);
+            lastAttachmentOrientationNormal = normal;
+            attached = true;
+
+            if (normal.dot(searchNormal) > SOLVE_CONVERGENCE_DOT) {
+                solveConverged = true;
+                break;
+            }
+
+            searchNormal = normal;
+        }
+
+        return attached;
     }
 
     private float wrapAngleInRange(float angle, float target) {
@@ -694,6 +888,11 @@ public class ClimberComponent {
             }
 
             mob.hasImpulse = true;
+            jumpDir = null;
+            if (detachOnJump) {
+                detachTicks = DETACH_TICKS;
+                detachOnJump = false;
+            }
             return true;
         }
         return false;
@@ -748,6 +947,37 @@ public class ClimberComponent {
 
     // ==================== COLLISION HELPERS ====================
 
+    private BlockGetter climbableView(BlockGetter getter) {
+        return new BlockGetter() {
+            @Override
+            public int getHeight() {
+                return getter.getHeight();
+            }
+
+            @Override
+            public int getMinY() {
+                return getter.getMinY();
+            }
+
+            @Nullable
+            @Override
+            public BlockEntity getBlockEntity(BlockPos pos) {
+                return getter.getBlockEntity(pos);
+            }
+
+            @Override
+            public BlockState getBlockState(BlockPos pos) {
+                BlockState state = getter.getBlockState(pos);
+                return state.isAir() || climber.canClimbOnBlock(state, pos) ? state : Blocks.AIR.defaultBlockState();
+            }
+
+            @Override
+            public FluidState getFluidState(BlockPos pos) {
+                return getter.getFluidState(pos);
+            }
+        };
+    }
+
     private void forEachCollisonBox(AABB aabb, Shapes.DoubleLineConsumer action) {
         int minChunkX = ((Mth.floor(aabb.minX - 1.0E-7D) - 1) >> 4);
         int maxChunkX = ((Mth.floor(aabb.maxX + 1.0E-7D) + 1) >> 4);
@@ -763,7 +993,8 @@ public class ClimberComponent {
 
         for (int cx = minChunkX; cx <= maxChunkX; cx++) {
             for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
-                blockReaderCache[(cx - minChunkX) + (cz - minChunkZ) * width] = collisionReader.getChunkForCollisions(cx, cz);
+                BlockGetter chunk = collisionReader.getChunkForCollisions(cx, cz);
+                blockReaderCache[(cx - minChunkX) + (cz - minChunkZ) * width] = chunk != null ? climbableView(chunk) : null;
             }
         }
 
@@ -788,7 +1019,8 @@ public class ClimberComponent {
 
             @Override
             public BlockState getBlockState(BlockPos pos) {
-                return collisionReader.getBlockState(pos);
+                BlockState state = collisionReader.getBlockState(pos);
+                return state.isAir() || climber.canClimbOnBlock(state, pos) ? state : Blocks.AIR.defaultBlockState();
             }
 
             @Override
@@ -822,8 +1054,8 @@ public class ClimberComponent {
         return boxes;
     }
 
-    private static double calculateXOffset(AABB aabb, AABB other, double offsetX) {
-        if (other.maxY > aabb.minY && other.minY < aabb.maxY && other.maxZ > aabb.minZ && other.minZ < aabb.maxZ) {
+    private static double calculateXOffset(AABB aabb, AABB other, double offsetX, double margin) {
+        if (other.maxY > aabb.minY - margin && other.minY < aabb.maxY + margin && other.maxZ > aabb.minZ - margin && other.minZ < aabb.maxZ + margin) {
             if (offsetX > 0.0D && other.maxX <= aabb.minX) {
                 double dx = aabb.minX - other.maxX;
                 if (dx < offsetX) {
@@ -841,8 +1073,8 @@ public class ClimberComponent {
         }
     }
 
-    private static double calculateYOffset(AABB aabb, AABB other, double offsetY) {
-        if (other.maxX > aabb.minX && other.minX < aabb.maxX && other.maxZ > aabb.minZ && other.minZ < aabb.maxZ) {
+    private static double calculateYOffset(AABB aabb, AABB other, double offsetY, double margin) {
+        if (other.maxX > aabb.minX - margin && other.minX < aabb.maxX + margin && other.maxZ > aabb.minZ - margin && other.minZ < aabb.maxZ + margin) {
             if (offsetY > 0.0D && other.maxY <= aabb.minY) {
                 double dy = aabb.minY - other.maxY;
                 if (dy < offsetY) {
@@ -860,8 +1092,8 @@ public class ClimberComponent {
         }
     }
 
-    private static double calculateZOffset(AABB aabb, AABB other, double offsetZ) {
-        if (other.maxX > aabb.minX && other.minX < aabb.maxX && other.maxY > aabb.minY && other.minY < aabb.maxY) {
+    private static double calculateZOffset(AABB aabb, AABB other, double offsetZ, double margin) {
+        if (other.maxX > aabb.minX - margin && other.minX < aabb.maxX + margin && other.maxY > aabb.minY - margin && other.minY < aabb.maxY + margin) {
             if (offsetZ > 0.0D && other.maxZ <= aabb.minZ) {
                 double dz = aabb.minZ - other.maxZ;
                 if (dz < offsetZ) {
@@ -884,4 +1116,3 @@ public class ClimberComponent {
         mob.setPosRaw((axisalignedbb.minX + axisalignedbb.maxX) / 2.0D, axisalignedbb.minY, (axisalignedbb.minZ + axisalignedbb.maxZ) / 2.0D);
     }
 }
-

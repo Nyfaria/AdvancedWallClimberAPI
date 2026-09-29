@@ -37,11 +37,15 @@ public class ClimberPathNavigator<T extends Mob & IAdvancedClimber> extends Adva
         Path path = this.createPath(entityIn, 0);
         if (path != null) {
             return this.moveTo(path, speedIn);
-        } else {
+        }
+
+        if (this.useVanillaBehaviour) {
             this.targetPosition = entityIn.blockPosition();
             this.speedModifier = speedIn;
             return true;
         }
+
+        return false;
     }
 
     @Override
