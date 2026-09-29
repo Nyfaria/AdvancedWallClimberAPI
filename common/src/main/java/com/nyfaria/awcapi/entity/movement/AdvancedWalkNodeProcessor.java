@@ -47,7 +47,7 @@ public class AdvancedWalkNodeProcessor extends WalkNodeEvaluator {
     protected boolean checkObstructions;
     protected int pathingSizeOffsetX, pathingSizeOffsetY, pathingSizeOffsetZ;
     protected EnumSet<Direction> pathableFacings = EnumSet.of(Direction.DOWN);
-    protected Direction[] pathableFacingsArray;
+    protected Direction[] pathableFacingsArray = new Direction[]{Direction.DOWN};
 
     private final Long2LongMap pathNodeTypeCache = new Long2LongOpenHashMap();
     private final Long2ObjectMap<PathType> rawPathNodeTypeCache = new Long2ObjectOpenHashMap<>();
@@ -75,6 +75,7 @@ public class AdvancedWalkNodeProcessor extends WalkNodeEvaluator {
             this.pathableFacings.remove(Direction.SOUTH);
             this.pathableFacings.remove(Direction.WEST);
         }
+        this.pathableFacingsArray = this.pathableFacings.toArray(new Direction[0]);
     }
 
     public void setCanPathCeiling(boolean canPathCeiling) {
@@ -83,6 +84,7 @@ public class AdvancedWalkNodeProcessor extends WalkNodeEvaluator {
         } else {
             this.pathableFacings.remove(Direction.UP);
         }
+        this.pathableFacingsArray = this.pathableFacings.toArray(new Direction[0]);
     }
 
     @Override
@@ -529,33 +531,40 @@ public class AdvancedWalkNodeProcessor extends WalkNodeEvaluator {
             return true;
         }
 
+        if(isSharingDirection(from, to)) {
+            return true;
+        }
+
         boolean dx = (to.x - from.x) != 0;
         boolean dy = (to.y - from.y) != 0;
         boolean dz = (to.z - from.z) != 0;
 
         boolean isDiagonal = (dx ? 1 : 0) + (dy ? 1 : 0) + (dz ? 1 : 0) > 1;
 
+        if(!isDiagonal) {
+            return false;
+        }
+
         Direction[] fromDirections = from.getPathableSides();
         Direction[] toDirections = to.getPathableSides();
 
         for(int i = 0; i < fromDirections.length; i++) {
-            Direction d1 = fromDirections[i];
+            Axis a1 = fromDirections[i].getAxis();
 
             for(int j = 0; j < toDirections.length; j++) {
-                Direction d2 = toDirections[j];
+                Axis a2 = toDirections[j].getAxis();
 
-                if(d1 == d2) {
-                    return true;
-                } else if(isDiagonal) {
-                    Axis a1 = d1.getAxis();
-                    Axis a2 = d2.getAxis();
-
-                    if((a1 == Axis.X && a2 == Axis.Y) || (a1 == Axis.Y && a2 == Axis.X)) {
-                        return !dz;
-                    } else if((a1 == Axis.X && a2 == Axis.Z) || (a1 == Axis.Z && a2 == Axis.X)) {
-                        return !dy;
-                    } else if((a1 == Axis.Z && a2 == Axis.Y) || (a1 == Axis.Y && a2 == Axis.Z)) {
-                        return !dx;
+                if((a1 == Axis.X && a2 == Axis.Y) || (a1 == Axis.Y && a2 == Axis.X)) {
+                    if(!dz) {
+                        return true;
+                    }
+                } else if((a1 == Axis.X && a2 == Axis.Z) || (a1 == Axis.Z && a2 == Axis.X)) {
+                    if(!dy) {
+                        return true;
+                    }
+                } else if((a1 == Axis.Z && a2 == Axis.Y) || (a1 == Axis.Y && a2 == Axis.Z)) {
+                    if(!dx) {
+                        return true;
                     }
                 }
             }
@@ -624,7 +633,7 @@ public class AdvancedWalkNodeProcessor extends WalkNodeEvaluator {
         });
 
         if(point instanceof DirectionalPathPoint == false) {
-            point = new DirectionalPathPoint(point);
+            point = new DirectionalPathPoint(point, packed, isDrop);
             this.nodes.put(hash, point);
         }
 
@@ -881,7 +890,8 @@ public class AdvancedWalkNodeProcessor extends WalkNodeEvaluator {
             }
 
             if(centerPathNodeType == PathType.OPEN && entity.getPathfindingMalus(selectedPathNodeType) == 0.0F) {
-                return packNodeType(PathType.OPEN, 0L);
+                long sides = centerPacked & 0xFFFFFFFFL;
+                return sides != 0L ? packNodeType(PathType.WALKABLE, sides) : packNodeType(PathType.OPEN, 0L);
             } else {
                 return packNodeType(selectedPathNodeType, centerPacked);
             }
@@ -889,7 +899,8 @@ public class AdvancedWalkNodeProcessor extends WalkNodeEvaluator {
     }
 
     protected long getDirectionalPathNodeType(PathfindingContext blockaccessIn, int x, int y, int z, int xSize, int ySize, int zSize, boolean canOpenDoorsIn, boolean canEnterDoorsIn, EnumSet<PathType> nodeTypeEnum, PathType nodeType, BlockPos pos) {
-        long packed = 0L;
+        PathType cornerNodeType = PathType.BLOCKED;
+        long sides = 0L;
 
         for(int ox = 0; ox < xSize; ++ox) {
             for(int oy = 0; oy < ySize; ++oy) {
@@ -913,15 +924,40 @@ public class AdvancedWalkNodeProcessor extends WalkNodeEvaluator {
                         adjustedNodeType = PathType.UNPASSABLE_RAIL;
                     }
                     if (ox == 0 && oy == 0 && oz == 0) {
-                        packed = packNodeType(adjustedNodeType, packedAdjusted);
+                        cornerNodeType = adjustedNodeType;
                     }
+
+                    sides |= packedAdjusted & outwardSides(ox, oy, oz, xSize, ySize, zSize);
 
                     nodeTypeEnum.add(adjustedNodeType);
                 }
             }
         }
 
-        return packed;
+        return packNodeType(cornerNodeType, sides);
+    }
+
+    static long outwardSides(int ox, int oy, int oz, int xSize, int ySize, int zSize) {
+        long mask = 0L;
+        if(ox == 0) {
+            mask = packDirection(Direction.WEST, mask);
+        }
+        if(ox == xSize - 1) {
+            mask = packDirection(Direction.EAST, mask);
+        }
+        if(oy == 0) {
+            mask = packDirection(Direction.DOWN, mask);
+        }
+        if(oy == ySize - 1) {
+            mask = packDirection(Direction.UP, mask);
+        }
+        if(oz == 0) {
+            mask = packDirection(Direction.NORTH, mask);
+        }
+        if(oz == zSize - 1) {
+            mask = packDirection(Direction.SOUTH, mask);
+        }
+        return mask;
     }
 
     @Override
@@ -930,7 +966,7 @@ public class AdvancedWalkNodeProcessor extends WalkNodeEvaluator {
     }
 
     protected long getDirectionalPathNodeType(PathfindingContext blockaccessIn, int x, int y, int z) {
-        return getDirectionalPathNodeType(this.rawPathNodeTypeCache, blockaccessIn, x, y, z, this.pathingSizeOffsetX, this.pathingSizeOffsetY, this.pathingSizeOffsetZ, this.pathableFacingsArray);
+        return getDirectionalPathNodeType(this.rawPathNodeTypeCache, blockaccessIn, x, y, z, this.pathableFacingsArray, this.advancedPathFindingEntity);
     }
 
     protected static PathType getRawPathNodeTypeCached(Long2ObjectMap<PathType> cache, PathfindingContext blockaccessIn, BlockPos.MutableBlockPos pos) {
@@ -939,7 +975,7 @@ public class AdvancedWalkNodeProcessor extends WalkNodeEvaluator {
         });
     }
 
-    protected static long getDirectionalPathNodeType(Long2ObjectMap<PathType> rawPathNodeTypeCache, PathfindingContext blockaccessIn, int x, int y, int z, int pathingSizeOffsetX, int pathingSizeOffsetY, int pathingSizeOffsetZ, Direction[] pathableFacings) {
+    protected static long getDirectionalPathNodeType(Long2ObjectMap<PathType> rawPathNodeTypeCache, PathfindingContext blockaccessIn, int x, int y, int z, Direction[] pathableFacings, @Nullable IAdvancedPathFindingEntity climber) {
         long packed = 0L;
 
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
@@ -951,40 +987,41 @@ public class AdvancedWalkNodeProcessor extends WalkNodeEvaluator {
             for(int i = 0; i < pathableFacings.length; i++) {
                 Direction pathableFacing = pathableFacings[i];
 
-                int checkHeight = pathableFacing.getAxis() != Axis.Y ? Math.min(4, pathingSizeOffsetY - 1) : 0;
+                pos.set(x + pathableFacing.getStepX(), y + pathableFacing.getStepY(), z + pathableFacing.getStepZ());
 
-                int cx = x + pathableFacing.getStepX() * pathingSizeOffsetX;
-                int cy = y + (pathableFacing == Direction.DOWN ? -1 : pathableFacing == Direction.UP ? pathingSizeOffsetY : 0);
-                int cz = z + pathableFacing.getStepZ() * pathingSizeOffsetZ;
+                PathType offsetNodeType = getRawPathNodeTypeCached(rawPathNodeTypeCache, blockaccessIn, pos);
+                boolean isCollider = isColliderNodeType(offsetNodeType);
 
-                for(int yo = 0; yo <= checkHeight; yo++) {
-                    pos.set(cx, cy + yo, cz);
-
-                    PathType offsetNodeType = getRawPathNodeTypeCached(rawPathNodeTypeCache, blockaccessIn, pos);
-                    nodeType = offsetNodeType != PathType.WALKABLE && offsetNodeType != PathType.OPEN && offsetNodeType != PathType.WATER && offsetNodeType != PathType.LAVA ? PathType.WALKABLE : PathType.OPEN;
-
-                    if(offsetNodeType == PathType.FIRE) {
-                        nodeType = PathType.FIRE;
+                if(isCollider && pathableFacing != Direction.DOWN && climber != null) {
+                    BlockPos immutable = pos.immutable();
+                    if(!climber.canClimbOnBlock(blockaccessIn.level().getBlockState(immutable), immutable)) {
+                        continue;
                     }
+                }
 
-                    if(offsetNodeType == PathType.DAMAGE_CAUTIOUS) {
-                        nodeType = PathType.DAMAGE_CAUTIOUS;
-                    }
+                nodeType = offsetNodeType != PathType.WALKABLE && offsetNodeType != PathType.OPEN && offsetNodeType != PathType.WATER && offsetNodeType != PathType.LAVA ? PathType.WALKABLE : PathType.OPEN;
 
-                    if(offsetNodeType == PathType.DAMAGING) {
-                        nodeType = PathType.DAMAGING;
-                    }
+                if(offsetNodeType == PathType.FIRE) {
+                    nodeType = PathType.FIRE;
+                }
 
-                    if(offsetNodeType == PathType.STICKY_HONEY) {
-                        nodeType = PathType.STICKY_HONEY;
-                    }
+                if(offsetNodeType == PathType.DAMAGE_CAUTIOUS) {
+                    nodeType = PathType.DAMAGE_CAUTIOUS;
+                }
 
-                    if(nodeType == PathType.WALKABLE) {
-                        if(isColliderNodeType(offsetNodeType)) {
-                            packed = packDirection(pathableFacing, packed);
-                        }
-                        isWalkable = true;
+                if(offsetNodeType == PathType.DAMAGING) {
+                    nodeType = PathType.DAMAGING;
+                }
+
+                if(offsetNodeType == PathType.STICKY_HONEY) {
+                    nodeType = PathType.STICKY_HONEY;
+                }
+
+                if(nodeType == PathType.WALKABLE) {
+                    if(isCollider) {
+                        packed = packDirection(pathableFacing, packed);
                     }
+                    isWalkable = true;
                 }
             }
         }

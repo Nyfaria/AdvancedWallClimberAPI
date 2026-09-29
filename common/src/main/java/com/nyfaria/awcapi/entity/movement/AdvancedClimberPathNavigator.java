@@ -90,7 +90,7 @@ public class AdvancedClimberPathNavigator<T extends Mob & IAdvancedClimber> exte
                 MoveControl moveController = this.mob.getMoveControl();
 
                 if (moveController instanceof ClimberMoveController && targetPoint instanceof DirectionalPathPoint directionalPoint && directionalPoint.getPathSide() != null) {
-                    ((ClimberMoveController<?>) moveController).setMoveTo(targetPos.x, targetPos.y, targetPos.z, targetPoint.asBlockPos().relative(dir), directionalPoint.getPathSide(), this.speedModifier);
+                    ((ClimberMoveController<?>) moveController).setMoveTo(targetPos.x, targetPos.y, targetPos.z, this.getSupportBlockPos(targetPoint.asBlockPos(), dir), directionalPoint.getPathSide(), this.speedModifier);
                 } else {
                     moveController.setWantedPosition(targetPos.x, targetPos.y, targetPos.z, this.speedModifier);
                 }
@@ -99,30 +99,47 @@ public class AdvancedClimberPathNavigator<T extends Mob & IAdvancedClimber> exte
     }
 
     public Vec3 getExactPathingTarget(BlockGetter blockaccess, BlockPos pos, Direction dir) {
-        BlockPos offsetPos = pos.relative(dir);
+        BlockPos support = this.getSupportBlockPos(pos, dir);
+        VoxelShape shape = blockaccess.getBlockState(support).getCollisionShape(blockaccess, support);
+        return computeExactPathingTarget(pos, dir, support, shape.isEmpty() ? null : shape.bounds(), this.mob.getBbWidth(), this.mob.getBbHeight());
+    }
 
-        VoxelShape shape = blockaccess.getBlockState(offsetPos).getCollisionShape(blockaccess, offsetPos);
+    public BlockPos getSupportBlockPos(BlockPos pos, Direction dir) {
+        return computeSupportBlockPos(pos, dir, this.mob.getBbWidth(), this.mob.getBbHeight());
+    }
 
-        Direction.Axis axis = dir.getAxis();
+    static int footprintSize(float extent) {
+        return Mth.floor(extent + 1.0F);
+    }
 
-        int sign = dir.getStepX() + dir.getStepY() + dir.getStepZ();
-        double offset = shape.isEmpty() ? sign : (sign > 0 ? shape.min(axis) - 1 : shape.max(axis));
-
-        double marginXZ = 1 - (this.mob.getBbWidth() % 1);
-        double marginY = 1 - (this.mob.getBbHeight() % 1);
-
-        double pathingOffsetXZ = (int) (this.mob.getBbWidth() + 1.0F) * 0.5D;
-        double pathingOffsetY = (int) (this.mob.getBbHeight() + 1.0F) * 0.5D - this.mob.getBbHeight() * 0.5f;
-
-        double x = offsetPos.getX() + pathingOffsetXZ + dir.getStepX() * marginXZ;
-        double y = offsetPos.getY() + pathingOffsetY + (dir == Direction.DOWN ? -pathingOffsetY : 0.0D) + (dir == Direction.UP ? -pathingOffsetY + marginY : 0.0D);
-        double z = offsetPos.getZ() + pathingOffsetXZ + dir.getStepZ() * marginXZ;
-
-        return switch (axis) {
-            case X -> new Vec3(x + offset, y, z);
-            case Y -> new Vec3(x, y + offset, z);
-            case Z -> new Vec3(x, y, z + offset);
+    static BlockPos computeSupportBlockPos(BlockPos pos, Direction dir, float width, float height) {
+        return switch (dir) {
+            case EAST -> pos.offset(footprintSize(width), 0, 0);
+            case SOUTH -> pos.offset(0, 0, footprintSize(width));
+            case UP -> pos.offset(0, footprintSize(height), 0);
+            default -> pos.relative(dir);
         };
+    }
+
+    static Vec3 computeExactPathingTarget(BlockPos pos, Direction dir, BlockPos support, @Nullable AABB shape, float width, float height) {
+        double halfWidth = width * 0.5D;
+
+        double x = pos.getX() + footprintSize(width) * 0.5D;
+        double y = pos.getY();
+        double z = pos.getZ() + footprintSize(width) * 0.5D;
+
+        if (shape != null) {
+            switch (dir) {
+                case DOWN -> y = support.getY() + shape.maxY;
+                case UP -> y = support.getY() + shape.minY - height;
+                case WEST -> x = support.getX() + shape.maxX + halfWidth;
+                case EAST -> x = support.getX() + shape.minX - halfWidth;
+                case NORTH -> z = support.getZ() + shape.maxZ + halfWidth;
+                case SOUTH -> z = support.getZ() + shape.minZ - halfWidth;
+            }
+        }
+
+        return new Vec3(x, y, z);
     }
 
     @Override
@@ -157,7 +174,7 @@ public class AdvancedClimberPathNavigator<T extends Mob & IAdvancedClimber> exte
                     isOnSameSideAsTarget = true;
                 } else if (currentTarget instanceof DirectionalPathPoint directionalPoint) {
                     Direction targetSide = directionalPoint.getPathSide();
-                    isOnSameSideAsTarget = targetSide == null || this.climber.getGroundDirection().getLeft() == targetSide;
+                    isOnSameSideAsTarget = targetSide == null || this.climber.getClimberComponent().isTouchingSide(targetSide);
                 } else {
                     isOnSameSideAsTarget = true;
                 }

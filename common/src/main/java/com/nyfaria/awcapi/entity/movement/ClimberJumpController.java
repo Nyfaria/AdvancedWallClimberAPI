@@ -34,12 +34,9 @@ public class ClimberJumpController<T extends Mob & IAdvancedClimber> extends Jum
     @Override
     public void tick() {
         this.climber.setJumping(this.jump);
-        if (this.jump) {
-            this.climber.setJumpDirection(this.dir);
-        } else if (this.dir == null) {
-            this.climber.setJumpDirection(null);
-        }
+        this.climber.setJumpDirection(this.jump ? this.dir : null);
         this.jump = false;
+        this.dir = null;
     }
 }
 

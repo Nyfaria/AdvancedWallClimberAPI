@@ -5,6 +5,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.pathfinder.PathType;
 import net.minecraft.world.level.pathfinder.Node;
 import org.jetbrains.annotations.Nullable;
@@ -65,6 +66,17 @@ public interface IAdvancedPathFindingEntity {
      */
     default float getPathingMalus(BlockGetter cache, Mob entity, PathType nodeType, BlockPos pos, Vec3i direction, Predicate<Direction> sides) {
         return entity.getPathfindingMalus(nodeType);
+    }
+
+    /**
+     * Checks if the entity can climb on the given block.
+     * Override to customize which blocks can be climbed.
+     * @param state The block state
+     * @param pos The block position
+     * @return true if the block can be climbed
+     */
+    default boolean canClimbOnBlock(BlockState state, BlockPos pos) {
+        return true;
     }
 
     /**
