@@ -21,6 +21,13 @@ import org.jetbrains.annotations.Nullable;
  * Handles orientation-aware movement and pathfinding.
  */
 public class ClimberMoveController<T extends Mob & IAdvancedClimber> extends MoveControl {
+    private static final double OFF_SURFACE_RATIO = 0.35D;
+    private static final double MIN_OFF_SURFACE_OFFSET = 0.3D;
+    private static final double MIN_GAP_JUMP_OFFSET = 0.5D;
+    private static final double DEGENERATE_STEER = 0.1D;
+    private static final double UNREPRESENTABLE_STEER = 0.3D;
+    private static final double MAX_DETACH_DROP = 3.0D;
+
     protected final IAdvancedClimber climber;
 
     @Nullable
@@ -48,6 +55,8 @@ public class ClimberMoveController<T extends Mob & IAdvancedClimber> extends Mov
     @Override
     public void tick() {
         double speed = this.climber.getMovementSpeed() * this.speedModifier;
+
+        this.climber.getClimberComponent().setDetachOnJump(false);
 
         if (this.operation == Operation.STRAFE) {
             this.operation = Operation.WAIT;
@@ -96,7 +105,7 @@ public class ClimberMoveController<T extends Mob & IAdvancedClimber> extends Mov
                 switch (this.side) {
                     case DOWN:
                         if (aabb.minY >= this.block.getY() + shape.max(Direction.Axis.Y) - 0.01D) {
-                            ox -= 0.1D;
+                            oy -= 0.1D;
                         }
                         break;
                     case UP:
@@ -219,7 +228,7 @@ public class ClimberMoveController<T extends Mob & IAdvancedClimber> extends Mov
                     dy -= this.side.getStepY() * 0.2f;
                     dz -= this.side.getStepZ() * 0.2f;
 
-                    if (hdsq < 0.1f) {
+                    if (hdsq < 0.1f && !this.climber.getClimberComponent().isTouchingSide(mainOffsetDir)) {
                         jumpDir = new Vec3(mainOffsetDir.getStepX(), mainOffsetDir.getStepY(), mainOffsetDir.getStepZ());
                     }
                 }
@@ -230,20 +239,53 @@ public class ClimberMoveController<T extends Mob & IAdvancedClimber> extends Mov
             Vec3 up = orientation.getGlobal(this.mob.yRot, -90);
 
             Vec3 offset = new Vec3(dx, dy, dz);
+            double offsetDist = offset.length();
 
             Vec3 targetDir = offset.subtract(up.scale(offset.dot(up)));
             double targetDist = targetDir.length();
-            targetDir = targetDir.normalize();
 
-            if (targetDist < 0.0001D) {
+            Vec3 steerDir = targetDir;
+            double steerDist = targetDist;
+
+            boolean acrossOpenSpace = offset.dot(up) > 0.0D;
+            Direction offsetFacing = Direction.getNearest(dx, dy, dz);
+
+            if (jumpDir == null && acrossOpenSpace && dy > -MAX_DETACH_DROP && offsetDist > MIN_GAP_JUMP_OFFSET && targetDist < OFF_SURFACE_RATIO * offsetDist
+                    && this.mob.onGround() && !this.climber.getClimberComponent().isTouchingSide(offsetFacing)) {
+                jumpDir = offset.normalize();
+                this.climber.getClimberComponent().setDetachOnJump(true);
+            } else if (offsetDist > MIN_OFF_SURFACE_OFFSET && targetDist < OFF_SURFACE_RATIO * offsetDist) {
+                Vec3 contactUp = new Vec3(-groundDir.getStepX(), -groundDir.getStepY(), -groundDir.getStepZ());
+                Vec3 contactDir = offset.subtract(contactUp.scale(offset.dot(contactUp)));
+                double contactDist = contactDir.length();
+
+                if (contactDist >= OFF_SURFACE_RATIO * offsetDist) {
+                    steerDir = contactDir;
+                    steerDist = contactDist;
+                } else if (jumpDir == null && targetDist < DEGENERATE_STEER && offsetDist > MIN_GAP_JUMP_OFFSET && this.mob.onGround()) {
+                    jumpDir = offset.normalize();
+                }
+            }
+
+            if (jumpDir == null && steerDist > 0.0001D && offsetDist > MIN_GAP_JUMP_OFFSET && this.mob.onGround()) {
+                Vec3 steerUnit = steerDir.normalize();
+                Vec3 planar = steerUnit.subtract(up.scale(steerUnit.dot(up)));
+                Direction steerFacing = Direction.getNearest(steerUnit.x, steerUnit.y, steerUnit.z);
+                if (planar.length() < UNREPRESENTABLE_STEER && !this.climber.getClimberComponent().isTouchingSide(steerFacing)) {
+                    jumpDir = steerUnit;
+                }
+            }
+
+            if (steerDist < 0.0001D && jumpDir == null) {
                 this.mob.setZza(0);
             } else {
-                float rx = (float) orientation.localZ.dot(targetDir);
-                float ry = (float) orientation.localX.dot(targetDir);
+                Vec3 steer = steerDist < 0.0001D ? offset.normalize() : steerDir.normalize();
+                float rx = (float) orientation.localZ.dot(steer);
+                float ry = (float) orientation.localX.dot(steer);
 
                 this.mob.yRot = this.rotlerp(this.mob.yRot, 270.0f - (float) Math.toDegrees(Mth.atan2(rx, ry)), 90.0f);
 
-                if (jumpDir == null && this.side != null && targetDist < 0.1D && groundDir == this.side.getOpposite()) {
+                if (jumpDir == null && this.side != null && targetDist < 0.1D && groundDir == this.side.getOpposite() && !this.climber.getClimberComponent().isTouchingSide(this.side)) {
                     jumpDir = new Vec3(this.side.getStepX(), this.side.getStepY(), this.side.getStepZ());
                 }
 

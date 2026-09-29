@@ -135,17 +135,6 @@ public interface IAdvancedClimber extends IAdvancedPathFindingEntity {
     }
 
     /**
-     * Checks if the entity can climb on the given block.
-     * Override to customize which blocks can be climbed.
-     * @param state The block state
-     * @param pos The block position
-     * @return true if the block can be climbed
-     */
-    default boolean canClimbOnBlock(BlockState state, BlockPos pos) {
-        return true;
-    }
-
-    /**
      * Gets the slipperiness of a block at the given position.
      * @param pos The block position
      * @return The slipperiness factor
