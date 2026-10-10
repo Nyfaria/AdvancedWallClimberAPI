@@ -1,45 +1,17 @@
 plugins {
     id 'multiloader-loader'
-    id 'net.fabricmc.fabric-loom'
-    id "me.modmuss50.mod-publish-plugin" version "0.5.1"
+    alias(nyfs.plugins.loom.loader)
+    alias(nyfs.plugins.regutils.loader)
+    id("com.nyfaria.moddingtools.dependencies")
+    id("com.nyfaria.moddingtools.publishing")
+    id 'multiloader-fabric'
+    id 'dev._100media.gradleutils' version '1.+'
     id 'maven-publish'
-}
-
-
-dependencies {
-    minecraft "com.mojang:minecraft:${minecraft_version}"
-
-    implementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
-    implementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
-}
-
-loom {
-    def aw = project(":common").file("src/main/resources/${mod_id}.accesswidener")
-    if (aw.exists()) {
-        accessWidenerPath.set(aw)
-    }
-    mixin {
-        defaultRefmapName.set("${mod_id}.refmap.json")
-    }
-    runs {
-        client {
-            client()
-            setConfigName(project.mod_id +": Fabric Client")
-            ideConfigGenerated(true)
-            runDir("runs/client")
-        }
-        server {
-            server()
-            setConfigName(project.mod_id +": Fabric Server")
-            ideConfigGenerated(true)
-            runDir("runs/server")
-        }
-    }
 }
 
 publishing {
     publications {
-        awcapi(MavenPublication) {
+        register('mavenJava', MavenPublication) {
             groupId = project.group
             artifactId = "${mod_id}-fabric"
             version = "${project.version}+${minecraft_version}"
@@ -77,51 +49,6 @@ publishing {
     }
 
     repositories {
-        maven {
-            name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/Nyfaria/AdvancedWallClimberAPI")
-            credentials {
-                username = System.getenv("GITHUB_ACTOR") ?: findProperty("gpr.user") ?: ""
-                password = System.getenv("GITHUB_TOKEN") ?: findProperty("gpr.key") ?: ""
-            }
-        }
-    }
-}
-
-publishMods {
-    file = jar.archiveFile
-    changelog = project(":common").file("changelog.md").text
-    type = STABLE
-    modLoaders.add("fabric")
-    displayName = "${mod_name}-${minecraft_version}-[Fabric]-${project.version}"
-    dryRun = dry_run.toBoolean()
-}
-
-if (curseforge_publishing_enabled.toBoolean()) {
-    publishMods {
-        curseforge {
-            projectId = curseforge_project_id
-            accessToken = providers.environmentVariable("curseforge_token")
-            minecraftVersions.add(minecraft_version)
-            clientRequired = true
-            serverRequired = true
-            javaVersions.add(JavaVersion.VERSION_21)
-            requires {
-                slug = "fabric-api"
-            }
-        }
-    }
-}
-
-if (modrinth_publishing_enabled.toBoolean()) {
-    publishMods {
-        modrinth {
-            accessToken = providers.environmentVariable("modrinth_token")
-            projectId = modrinth_project_id
-            minecraftVersions.add(minecraft_version)
-            requires {
-                slug = "fabric-api"
-            }
-        }
+        maven(hundredMedia.getPublishing100MediaMaven())
     }
 }

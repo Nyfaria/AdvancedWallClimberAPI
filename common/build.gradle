@@ -1,44 +1,20 @@
 plugins {
     id 'multiloader-common'
-    id 'net.neoforged.moddev'
+    alias(nyfs.plugins.mdg.loader)
+    alias(nyfs.plugins.regutils.loader)
+    id 'multiloader-vanilla'
+    id 'dev._100media.gradleutils' version '1.+'
     id 'maven-publish'
 }
 
-neoForge {
-    neoFormVersion = neo_form_version
-    def at = file('src/main/resources/META-INF/accesstransformer.cfg')
-    if (at.exists()) {
-        accessTransformers.from(at.absolutePath)
-    }
-}
-repositories {
-    maven { url "https://maven.fabricmc.net/" }
-}
 dependencies {
-    compileOnly group: 'org.spongepowered', name: 'mixin', version: '0.8.5'
-    compileOnly group: 'io.github.llamalad7', name: 'mixinextras-common', version: '0.5.2'
-    annotationProcessor group: 'io.github.llamalad7', name: 'mixinextras-common', version: '0.5.2'
-}
-
-configurations {
-    commonJava {
-        canBeResolved = false
-        canBeConsumed = true
-    }
-    commonResources {
-        canBeResolved = false
-        canBeConsumed = true
-    }
-}
-
-artifacts {
-    commonJava sourceSets.main.java.sourceDirectories.singleFile
-    commonResources sourceSets.main.resources.sourceDirectories.singleFile
+    compileOnly(nyfs.bundles.mixin.common.get())
+    annotationProcessor nyfs.mixin.extras.common.get()
 }
 
 publishing {
     publications {
-        awcapi(MavenPublication) {
+        register('mavenJava', MavenPublication) {
             groupId = project.group
             artifactId = "${mod_id}-common"
             version = "${project.version}+${minecraft_version}"
@@ -76,14 +52,6 @@ publishing {
     }
 
     repositories {
-        maven {
-            name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/Nyfaria/AdvancedWallClimberAPI")
-            credentials {
-                username = System.getenv("GITHUB_ACTOR") ?: findProperty("gpr.user") ?: ""
-                password = System.getenv("GITHUB_TOKEN") ?: findProperty("gpr.key") ?: ""
-            }
-        }
+        maven(hundredMedia.getPublishing100MediaMaven())
     }
 }
-
