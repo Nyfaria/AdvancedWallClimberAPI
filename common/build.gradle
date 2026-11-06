@@ -14,14 +14,10 @@ dependencies {
 
 publishing {
     publications {
-        register('mavenJava', MavenPublication) {
+        named('mavenJava', MavenPublication) {
             groupId = project.group
             artifactId = "${mod_id}-common"
             version = "${project.version}+${minecraft_version}"
-
-            afterEvaluate {
-                artifact tasks.named("jar")
-            }
 
             pom {
                 name = mod_name
